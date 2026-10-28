@@ -2,7 +2,7 @@ import { memo, useMemo, useState } from 'react';
 import type { CategoryId, CharacterState } from '../types';
 import { CATEGORIES, GROUPS, groupOf, findItem, thumbViewBox, type CatalogItem } from '../data/catalog';
 import { applyItem, isSelected } from '../lib/apply';
-import { getGeo } from '../character/geometry';
+import { frameViewBox, getGeo } from '../character/geometry';
 import { CharacterSvg } from '../character/Character';
 
 interface Props {
@@ -127,7 +127,7 @@ export function Catalog({ c, activeCat, onCat, onPick, onColor, onRandomCat, onS
             onFocus={() => setHovered(item)}
             title={item.name}
           >
-            <Thumb preview={preview} viewBox={viewBox} sig={sig} />
+            <Thumb preview={preview} viewBox={def.view === 'full' ? frameViewBox(getGeo(preview.body, preview.headShape)) : viewBox} sig={sig} />
             <span className="label">
               {item.swatch && <span style={{ width: 10, height: 10, borderRadius: 5, background: item.swatch, border: '1.5px solid #1d1d1d', marginRight: 4, flex: 'none' }} />}
               {item.name}

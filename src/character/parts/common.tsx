@@ -4,6 +4,9 @@ export const SW = 3;
 
 export const ink = { stroke: O, strokeWidth: SW, strokeLinejoin: 'round' as const, strokeLinecap: 'round' as const };
 
+/** Ink for an outline-only re-stroke; the flat show style hides it. */
+export const edge = { ...ink, fill: 'none', className: 'ol' };
+
 /** Bumpy cloud/afro/beard outline around an ellipse. */
 export function scallop(cx: number, cy: number, rx: number, ry: number, bumps: number, depth = 0.12, rot = 0): string {
   const pts: string[] = [];

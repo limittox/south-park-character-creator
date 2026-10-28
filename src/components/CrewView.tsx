@@ -107,7 +107,7 @@ export function CrewView({ crew, setCrew, onEdit, onGroupPhoto, onCreate }: Prop
           {crew.map((m) => (
             <article key={m.id} className="panel crew-card">
               <div className="portrait">
-                <CharacterSvg c={m.c} viewBox="-30 -60 460 560" />
+                <CharacterSvg c={m.c} />
                 <input className="pick" type="checkbox" checked={picked.has(m.id)} onChange={() => toggle(m.id)} aria-label={`Pick ${m.c.name} for a group photo`} />
               </div>
               <h3 title={m.c.name}>{m.c.name || 'Nobody'}</h3>

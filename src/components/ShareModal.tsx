@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { CharacterState } from '../types';
 import { Modal } from './Modal';
 import { CharacterGroup } from '../character/Character';
+import { charFrame, getGeo, GROUND_Y } from '../character/geometry';
 import { shareUrl } from '../lib/share';
 import { downloadBlob, safeFileName, svgToBlob } from '../lib/exportImage';
 import { toast } from '../lib/toast';
@@ -12,6 +13,8 @@ export function ShareModal({ c, onClose }: { c: CharacterState; onClose: () => v
   const [copied, setCopied] = useState(false);
   const pngRef = useRef<SVGSVGElement>(null);
   const jpgRef = useRef<SVGSVGElement>(null);
+  const f = charFrame(getGeo(c.body, c.headShape));
+  const viewBox = `${f.x} ${f.y} ${f.w} ${f.h}`;
 
   const copy = async () => {
     try {
@@ -32,7 +35,7 @@ export function ShareModal({ c, onClose }: { c: CharacterState; onClose: () => v
     try {
       const blob = await svgToBlob(svg, {
         width: 1000,
-        height: 1100,
+        height: Math.round((1000 * f.h) / f.w),
         type: kind === 'png' ? 'image/png' : 'image/jpeg',
         background: kind === 'png' ? 'transparent' : '#ffffff',
       });
@@ -61,12 +64,12 @@ export function ShareModal({ c, onClose }: { c: CharacterState; onClose: () => v
           ⬇️ JPEG
         </button>
       </div>
-      <svg ref={pngRef} viewBox="-40 -70 480 528" width={0} height={0} style={{ position: 'absolute' }} aria-hidden="true">
+      <svg ref={pngRef} viewBox={viewBox} width={0} height={0} style={{ position: 'absolute' }} aria-hidden="true">
         <CharacterGroup c={c} />
       </svg>
-      <svg ref={jpgRef} viewBox="-40 -70 480 528" width={0} height={0} style={{ position: 'absolute' }} aria-hidden="true">
-        <rect x={-40} y={-70} width={480} height={528} fill="#bfe6ff" />
-        <rect x={-40} y={440} width={480} height={60} fill="#f4f8ff" />
+      <svg ref={jpgRef} viewBox={viewBox} width={0} height={0} style={{ position: 'absolute' }} aria-hidden="true">
+        <rect x={f.x} y={f.y} width={f.w} height={f.h} fill="#bfe6ff" />
+        <rect x={f.x} y={GROUND_Y - 36} width={f.w} height={f.y + f.h - GROUND_Y + 36} fill="#f4f8ff" />
         <CharacterGroup c={c} />
       </svg>
     </Modal>

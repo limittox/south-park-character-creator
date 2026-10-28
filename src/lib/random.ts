@@ -45,8 +45,8 @@ export function randomizeCategory(c: CharacterState, cat: CategoryId, rnd = Math
 }
 
 export function randomCharacter(rnd = Math.random, keepName = false, base: CharacterState = DEFAULT_CHARACTER): CharacterState {
-  const body = pick(['kid', 'kid', 'kid', 'husky', 'skinny', 'adult', 'dadbod', 'lanky'], rnd);
-  const adult = body === 'adult' || body === 'dadbod' || body === 'lanky';
+  const body = pick(['kid', 'kid', 'kid', 'husky', 'skinny', 'adult', 'dadbod', 'lanky', 'buff'], rnd);
+  const adult = body === 'adult' || body === 'dadbod' || body === 'lanky' || body === 'buff';
   let c: CharacterState = {
     ...DEFAULT_CHARACTER,
     name: keepName ? base.name : randomName(rnd),

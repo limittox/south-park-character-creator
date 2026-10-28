@@ -295,6 +295,21 @@ button {
   filter: drop-shadow(0 0 5px #ffe14d) drop-shadow(0 0 2px #ffe14d) brightness(1.06);
 }
 
+/* Stop-motion hop, like a cut-out being walked across the table. */
+.hop {
+  animation: hop 0.42s steps(3, jump-none) infinite;
+}
+
+@keyframes hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-26px);
+  }
+}
+
 .sp-propeller {
   transform-box: fill-box;
   transform-origin: center;
@@ -333,6 +348,9 @@ button {
   top: 10px;
   display: flex;
   flex-direction: column;
+  /* On short stages the buttons spill into a second column instead of off the bottom. */
+  flex-wrap: wrap-reverse;
+  max-height: calc(100% - 20px);
   gap: 6px;
 }
 

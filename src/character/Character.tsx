@@ -1,18 +1,6 @@
 import { memo, useId, type ReactNode } from 'react';
 import type { CategoryId, CharacterState, RenderCtx } from '../types';
-import {
-  armGeo,
-  armPath,
-  CANADIAN_SPLIT_Y,
-  CHAR_VIEWBOX,
-  getGeo,
-  HEAD_RX,
-  HEAD_RY,
-  HEAD_SHAPES,
-  handPos,
-  quadAt,
-  type ArmGeo,
-} from './geometry';
+import { ADULT_FACE_FIT, armGeo, armPath, CANADIAN_SPLIT_Y, eyeFit, FACE_FIT, frameViewBox, getGeo, HEAD_RX, HEAD_RY, HEAD_SHAPES, handPos } from './geometry';
 import { ink, O } from './parts/common';
 import { BROWS, EYES, FACE_DETAILS, FACIAL_HAIR, MOUTHS, NOSES, talkingMouth } from './parts/face';
 import { HAIR } from './parts/hair';
@@ -29,22 +17,13 @@ export interface CharacterProps {
   c: CharacterState;
   /** Mouth openness while talking, 0..1. */
   talk?: number;
+  /** Three-quarter turn, -1 (facing the viewer's left) to 1 (right). The face slides across the head, like the show. */
+  turn?: number;
   onPartClick?: (cat: CategoryId) => void;
 }
 
-function crossLine(a: ArmGeo, t: number, half: number) {
-  const [x, y] = quadAt(a, t);
-  const u = 1 - t;
-  const tx = 2 * u * (a.ctrl[0] - a.start[0]) + 2 * t * (a.end[0] - a.ctrl[0]);
-  const ty = 2 * u * (a.ctrl[1] - a.start[1]) + 2 * t * (a.end[1] - a.ctrl[1]);
-  const len = Math.hypot(tx, ty) || 1;
-  const nx = (-ty / len) * half;
-  const ny = (tx / len) * half;
-  return `M ${x - nx} ${y - ny} L ${x + nx} ${y + ny}`;
-}
-
 /** A whole character as an SVG <g>, in character coordinates (ground at y = 480). */
-export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, onPartClick }: CharacterProps) {
+export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn = 0, onPartClick }: CharacterProps) {
   const rawId = useId();
   const prefix = 'c' + rawId.replace(/[^a-zA-Z0-9]/g, '');
   let counter = 0;
@@ -92,19 +71,31 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, onPart
   const sy = g.headRy / HEAD_RY;
   const headT = `translate(${g.headCx} ${g.headCy}) scale(${sx} ${sy})`;
 
-  // Hair hidden under hats.
+  // In the show hats are pulled right down to the eyes, so crown-covering hats sit a little lower.
+  const hatDrop = hat.clipHairAbove !== undefined && !hat.hidesHair && !hat.hidesFace ? Math.min(16, Math.max(0, -30 - hat.clipHairAbove)) : 0;
+  const hatT = hatDrop ? `translate(0 ${hatDrop})` : undefined;
+
+  // Hair hidden under hats. Hair behind the head is cut a little lower so it can't peek out past the brim.
   let hairClipId: string | undefined;
+  let backClipId: string | undefined;
   let hairClipDef: ReactNode = null;
   if (hat.clipHairAbove !== undefined && !hat.hidesHair) {
     hairClipId = uid('hairclip');
+    backClipId = uid('backclip');
     hairClipDef = (
-      <clipPath id={hairClipId}>
-        <rect x={-400} y={hat.clipHairAbove} width={800} height={900} />
-      </clipPath>
+      <>
+        <clipPath id={hairClipId}>
+          <rect x={-400} y={hat.clipHairAbove + hatDrop} width={800} height={900} />
+        </clipPath>
+        <clipPath id={backClipId}>
+          <rect x={-400} y={hat.clipHairAbove + hatDrop + 14} width={800} height={900} />
+        </clipPath>
+      </>
     );
   }
   const showHair = !hat.hidesHair && !hat.hidesFace;
   const hairClip = hairClipId ? `url(#${hairClipId})` : undefined;
+  const backClip = backClipId ? `url(#${backClipId})` : undefined;
 
   const photo = c.usePhotoFace && c.photoFace ? c.photoFace : null;
   const canadian = !!shape.canadian;
@@ -116,22 +107,15 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, onPart
   const armsVisible = top.sleeves !== 'hidden';
   const arms = ([-1, 1] as const).map((side) => armGeo(g, side));
 
-  const armOutline = armsVisible
-    ? arms.map((a) => <path key={a.side} d={armPath(a)} fill="none" stroke={O} strokeWidth={g.armW + 6} strokeLinecap="round" />)
-    : null;
-
+  // Flat cut-out arms: one colour, no outline, and a single crease where the arm meets the body.
   const armColor = armsVisible
     ? arms.map((a) => (
         <g key={a.side}>
           <path d={armPath(a)} fill="none" stroke={armBase} strokeWidth={g.armW} strokeLinecap="round" />
           {top.sleeves === 'short' && (
-            <>
-              <path d={armPath(a, 0, 0.5)} fill="none" stroke={sleeveColor} strokeWidth={g.armW + 1} strokeLinecap="butt" />
-              <path d={crossLine(a, 0.5, g.armW / 2 + 2)} stroke={O} strokeWidth={2.4} />
-            </>
+            <path d={armPath(a, 0, 0.5)} fill="none" stroke={sleeveColor} strokeWidth={g.armW + 1} strokeLinecap="butt" />
           )}
-          {top.sleeves === 'long' && <path d={crossLine(a, 0.86, g.armW / 2 + 2)} stroke={O} strokeWidth={2.2} />}
-          <path d={armPath(a, 0.34, 0.92)} transform={`translate(${-a.side * g.armW * 0.46} 0)`} fill="none" stroke={O} strokeWidth={2.2} strokeLinecap="round" />
+          <path d={armPath(a, 0.6, 0.92)} transform={`translate(${-a.side * g.armW * 0.42} 0)`} fill="none" stroke={O} strokeWidth={2.4} strokeLinecap="round" />
         </g>
       ))
     : null;
@@ -141,7 +125,7 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, onPart
     const [hx, hy] = handPos(g, side);
     return (
       <g key={side}>
-        <ellipse cx={hx} cy={hy} rx={g.handR} ry={g.handR * 1.05} fill={mitten} {...ink} />
+        <ellipse cx={hx} cy={hy} rx={g.handR} ry={g.handR * (g.isAdult ? 1.45 : 1.25)} fill={mitten} {...ink} />
         <ellipse
           cx={hx - side * g.handR * 0.72}
           cy={hy - g.handR * 0.5}
@@ -156,36 +140,48 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, onPart
   });
 
   /* ---- head contents (head coordinates) ---- */
+  const fit = (t: string, children: ReactNode) => <g transform={t}>{children}</g>;
+  const FIT = g.isAdult ? ADULT_FACE_FIT : FACE_FIT;
+  const EYES_FIT = eyeFit(FIT, g);
+
   const faceParts = (): ReactNode[] => {
     if (hat.hidesFace) return [];
     const out: ReactNode[] = [];
-    out.push(part('faceDetail', detail.render(ctx(c.hairColor)), 'detail'));
+    out.push(part('faceDetail', fit(FIT.detail, detail.render(ctx(c.hairColor))), 'detail'));
     if (photo) {
-      out.push(part('skin', <PhotoFace src={photo} talk={talk} uid={uid} />, 'photo'));
+      out.push(part('skin', <PhotoFace src={photo} talk={talk} uid={uid} stretch={sy / sx} />, 'photo'));
     } else {
-      out.push(part('nose', nose.render(ctx(c.hairColor)), 'nose'));
-      if (fhair.under) out.push(part('facialHair', fhair.under(ctx(c.hairColor)), 'fh-under'));
+      out.push(part('nose', fit(FIT.nose, nose.render(ctx(c.hairColor))), 'nose'));
+      if (fhair.under) out.push(part('facialHair', fit(FIT.jaw, fhair.under(ctx(c.hairColor))), 'fh-under'));
       if (canadian) {
         // the split line *is* the mouth
       } else {
-        out.push(part('mouth', mouthOpen ? talkingMouth(talk) : mouth.render(ctx(c.hairColor)), 'mouth'));
+        out.push(part('mouth', fit(FIT.mouth, mouthOpen ? talkingMouth(talk) : mouth.render(ctx(c.hairColor))), 'mouth'));
       }
-      if (fhair.over) out.push(part('facialHair', fhair.over(ctx(c.hairColor)), 'fh-over'));
-      out.push(part('eyes', eyes.render(ctx(c.hairColor)), 'eyes'));
+      if (fhair.over) out.push(part('facialHair', fit(FIT.mouth, fhair.over(ctx(c.hairColor))), 'fh-over'));
+      if (!hat.eyesOver) out.push(part('eyes', fit(EYES_FIT, eyes.render(ctx(c.hairColor))), 'eyes'));
     }
-    if (gear.render) out.push(part('faceGear', gear.render(ctx(c.hairColor)), 'gear'));
+    if (gear.render) out.push(part('faceGear', fit(FIT.gear, gear.render(ctx(c.hairColor))), 'gear'));
     return out;
   };
+
+  // Turning slides the whole face sideways and squeezes it a little; hair and hats sway along.
+  const look = Math.max(-1, Math.min(1, turn));
+  const faceT = look ? `translate(${look * 34} 0) scale(${1 - Math.abs(look) * 0.12} 1)` : undefined;
+  const swayT = look ? `translate(${look * 6} 0)` : undefined;
 
   const headFront = (): ReactNode => (
     <>
       {part('skin', <path d={shape.path} fill={c.skin} {...ink} />, 'skin')}
-      {faceParts()}
-      {showHair && hair.front && part('hair', <g clipPath={hairClip}>{hair.front(ctx(c.hairColor))}</g>, 'hairfront')}
-      {/* Brows sit on top of fringes so they stay visible; hats still cover them. */}
-      {!hat.hidesFace && !photo && c.brows !== 'none' && part('brows', <BrowHalo skin={c.skin} uid={uid}>{brows.render(ctx(c.hairColor))}</BrowHalo>, 'brows')}
-      {!hat.hidesFace && glasses.render && part('glasses', glasses.render(ctx(c.glassesColor)), 'glasses')}
-      {hat.front && part('hat', hat.front(ctx(c.hatColor)), 'hat')}
+      <g transform={faceT}>{faceParts()}</g>
+      {showHair && hair.front && part('hair', <g transform={swayT} clipPath={hairClip}>{hair.front(ctx(c.hairColor))}</g>, 'hairfront')}
+      <g transform={faceT}>
+        {/* Brows sit on top of fringes so they stay visible; hats still cover them. */}
+        {!hat.hidesFace && !photo && c.brows !== 'none' && part('brows', fit(EYES_FIT, <BrowHalo skin={c.skin} uid={uid}>{brows.render(ctx(c.hairColor))}</BrowHalo>), 'brows')}
+        {!hat.hidesFace && glasses.render && part('glasses', fit(EYES_FIT, glasses.render(ctx(c.glassesColor))), 'glasses')}
+      </g>
+      {hat.front && part('hat', <g transform={swayT}><g transform={hatT}>{hat.front(ctx(c.hatColor))}</g></g>, 'hat')}
+      {hat.eyesOver && !photo && <g transform={faceT}>{part('eyes', fit(EYES_FIT, eyes.render(ctx(c.hairColor))), 'eyes-over')}</g>}
     </>
   );
 
@@ -208,7 +204,7 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, onPart
         <clipPath id={gapId}>
           <rect x={-400} y={split - lift - 2} width={800} height={lift + 4} />
         </clipPath>
-        {lift > 0 && <path d={shape.path} fill="#4a1414" clipPath={`url(#${gapId})`} />}
+        {lift > 0 && <path d={shape.path} fill="#2b1b22" clipPath={`url(#${gapId})`} />}
         <g clipPath={`url(#${botId})`}>{headFront()}</g>
         <path d={`M ${-lineHalf} ${split} Q 0 ${split + 6} ${lineHalf} ${split}`} fill="none" stroke={O} strokeWidth={3.5} />
         <g transform={`translate(0 ${-lift})`}>
@@ -229,13 +225,12 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, onPart
       {pet.render && part('sidekick', pet.render(ctx(c.heldColor)))}
       {neck.back && part('neck', neck.back(ctx(c.neckColor)))}
       {showHair && hair.back && (
-        <g transform={headT}>{part('hair', <g clipPath={hairClip}>{hair.back(ctx(c.hairColor))}</g>)}</g>
+        <g transform={headT}>{part('hair', <g clipPath={backClip}>{hair.back(ctx(c.hairColor))}</g>)}</g>
       )}
-      {hat.back && <g transform={headT}>{part('hat', hat.back(ctx(c.hatColor)))}</g>}
+      {hat.back && <g transform={headT}>{part('hat', <g transform={hatT}>{hat.back(ctx(c.hatColor))}</g>)}</g>}
       {part('bottom', bottom.render(ctx(bottomColor)))}
       {part('shoes', shoes.render(ctx(c.shoesColor)))}
       {top.skirt && part('top', top.skirt(ctx(c.topColor)))}
-      {armOutline}
       {part(
         'top',
         <>
@@ -272,7 +267,8 @@ function BrowHalo({ skin, uid, children }: { skin: string; uid: (n: string) => s
   );
 }
 
-function PhotoFace({ src, talk, uid }: { src: string; talk: number; uid: (n: string) => string }) {
+/** A real face pasted on the paper head. `stretch` undoes the head's vertical stretch so photos keep their shape. */
+function PhotoFace({ src, talk, uid, stretch }: { src: string; talk: number; uid: (n: string) => string; stretch: number }) {
   const faceId = uid('face');
   const topId = uid('facetop');
   const botId = uid('facebot');
@@ -280,7 +276,7 @@ function PhotoFace({ src, talk, uid }: { src: string; talk: number; uid: (n: str
   const split = 46;
   const img = <image href={src} x={-88} y={-92} width={176} height={196} preserveAspectRatio="xMidYMid slice" />;
   return (
-    <g>
+    <g transform={`translate(0 22) scale(1.05 ${1.05 / stretch})`}>
       <clipPath id={faceId}>
         <ellipse cx={0} cy={6} rx={84} ry={94} />
       </clipPath>
@@ -291,7 +287,7 @@ function PhotoFace({ src, talk, uid }: { src: string; talk: number; uid: (n: str
         <rect x={-200} y={split} width={400} height={200} />
       </clipPath>
       <g clipPath={`url(#${faceId})`}>
-        {drop > 0 && <rect x={-90} y={split - 2} width={180} height={drop + 4} fill="#4a1414" />}
+        {drop > 0 && <rect x={-90} y={split - 2} width={180} height={drop + 4} fill="#2b1b22" />}
         <g clipPath={`url(#${topId})`}>{img}</g>
         <g transform={`translate(0 ${drop})`}>
           <g clipPath={`url(#${botId})`}>{img}</g>
@@ -308,11 +304,11 @@ export interface CharacterSvgProps extends CharacterProps {
   title?: string;
 }
 
-export const DEFAULT_VIEWBOX = `${CHAR_VIEWBOX.x} ${CHAR_VIEWBOX.y} ${CHAR_VIEWBOX.w} ${CHAR_VIEWBOX.h}`;
-
-export function CharacterSvg({ viewBox = DEFAULT_VIEWBOX, className, title, ...rest }: CharacterSvgProps) {
+/** A standalone character picture. Without a viewBox it frames the whole character. */
+export function CharacterSvg({ viewBox, className, title, ...rest }: CharacterSvgProps) {
+  const box = viewBox ?? frameViewBox(getGeo(rest.c.body, rest.c.headShape));
   return (
-    <svg viewBox={viewBox} className={className} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={title ?? rest.c.name}>
+    <svg viewBox={box} className={className} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={title ?? rest.c.name}>
       <CharacterGroup {...rest} />
     </svg>
   );

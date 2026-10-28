@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import type { CharacterState } from '../types';
 import { CharacterGroup } from '../character/Character';
+import { charFrame, getGeo, GROUND_Y } from '../character/geometry';
 import { Modal } from './Modal';
 import { DISLIKES, KNOWN_FOR, LIKES, STAT_NAMES, TITLES } from '../data/humor';
 import { seeded } from '../character/parts/common';
@@ -62,6 +63,9 @@ export function makeProfile(c: CharacterState, reroll: number): Profile {
 
 export function CardSvg({ c, profile, svgRef }: { c: CharacterState; profile: Profile; svgRef?: React.Ref<SVGSVGElement> }) {
   const name = c.name.trim() || 'Nobody Special';
+  // Portrait slot is 420×500; frame the whole character at that aspect.
+  const f = charFrame(getGeo(c.body, c.headShape));
+  const pw = f.h * 0.84;
   return (
     <svg ref={svgRef} className="id-card" viewBox="0 0 1000 1400" xmlns="http://www.w3.org/2000/svg">
       <rect x={10} y={10} width={980} height={1380} rx={40} fill="#fffdf6" stroke="#1d1d1d" strokeWidth={8} />
@@ -73,8 +77,8 @@ export function CardSvg({ c, profile, svgRef }: { c: CharacterState; profile: Pr
         A QUIET LITTLE PAPER TOWN · NO. {profile.idNo}
       </text>
       <rect x={60} y={210} width={420} height={500} rx={24} fill="#bfe6ff" stroke="#1d1d1d" strokeWidth={6} />
-      <svg x={60} y={210} width={420} height={500} viewBox="-30 -60 460 560">
-        <rect x={-100} y={420} width={700} height={200} fill="#f4f8ff" />
+      <svg x={60} y={210} width={420} height={500} viewBox={`${f.x + f.w / 2 - pw / 2} ${f.y} ${pw} ${f.h}`}>
+        <rect x={f.x - 200} y={GROUND_Y - 36} width={f.w + 400} height={200} fill="#f4f8ff" />
         <CharacterGroup c={c} />
       </svg>
       <text x={520} y={262} fontFamily={DISPLAY} fontSize={26} fill="#5d5a52">

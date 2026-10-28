@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import type { ItemBase, Render, RenderCtx } from '../../types';
 import { shade } from '../../lib/color';
-import { heartPath, ink, Mirror, O, starPath } from './common';
+import { edge, heartPath, ink, Mirror, O, starPath } from './common';
+import { HEAD_SHAPES } from '../geometry';
 
 export interface HeadPart extends ItemBase {
   render: Render;
@@ -27,32 +28,37 @@ const LID_LEFT: Record<Exclude<Lid, 'none'>, string> = {
   sad: 'M -80 -70 L 12 -70 L 12 -34 L -80 -4 Z',
 };
 
+/**
+ * The show's eyes: two big white ovals with no outline, leaning in at the top and
+ * meeting in the middle, with tiny dot pupils. A faint seam shows where they overlap.
+ */
 function eyePair(ctx: RenderCtx, o: EyeOpts = {}): ReactNode {
   const s = o.scale ?? 1;
   const lid = o.lid ?? 'none';
   const sides: (-1 | 1)[] = o.only ? [o.only] : [-1, 1];
+  const shape = (side: -1 | 1) => ({ cx: side * 27 * s, cy: 0, rx: 28 * s, ry: 36 * s, transform: `rotate(${-side * 14} ${side * 27 * s} 0)` });
+  const clipIds = { [-1]: ctx.uid('eye-1'), [1]: ctx.uid('eye1') } as Record<-1 | 1, string>;
   return (
     <g>
       {sides.map((side) => {
-        const cx = side * 27 * s;
-        const rx = 28 * s;
-        const ry = 36 * s;
-        const t = `rotate(${-side * 12} ${cx} 0)`;
-        const id = ctx.uid(`eye${side}`);
+        const { cx } = shape(side);
+        const id = clipIds[side];
         return (
           <g key={side}>
             <clipPath id={id}>
-              <ellipse cx={cx} cy={0} rx={rx} ry={ry} transform={t} />
+              <ellipse {...shape(side)} />
             </clipPath>
-            <ellipse cx={cx} cy={0} rx={rx} ry={ry} transform={t} fill={o.white ?? '#fff'} />
+            <ellipse {...shape(side)} fill={o.white ?? '#fff'} />
+            {side === 1 && sides.length === 2 && (
+              <ellipse {...shape(1)} fill="none" stroke="#aaa49c" strokeWidth={1.6} clipPath={`url(#${clipIds[-1]})`} />
+            )}
             <g clipPath={`url(#${id})`}>
-              {o.pupil ? o.pupil(side, cx) : <circle cx={side * 12} cy={2} r={4.6} fill={O} />}
+              {o.pupil ? o.pupil(side, cx) : <circle cx={side * 16.5} cy={2} r={3.4} fill={O} />}
               {o.extra?.(side, cx)}
               {lid !== 'none' && (
-                <path d={LID_LEFT[lid]} transform={side === 1 ? 'scale(-1 1)' : undefined} fill={ctx.c.skin} {...ink} />
+                <path d={LID_LEFT[lid]} transform={side === 1 ? 'scale(-1 1)' : undefined} fill={ctx.c.skin} {...ink} className="keep" />
               )}
             </g>
-            <ellipse cx={cx} cy={0} rx={rx} ry={ry} transform={t} fill="none" {...ink} />
           </g>
         );
       })}
@@ -60,7 +66,7 @@ function eyePair(ctx: RenderCtx, o: EyeOpts = {}): ReactNode {
   );
 }
 
-const dot = (x: number, y: number, r = 4.6) => <circle cx={x} cy={y} r={r} fill={O} />;
+const dot = (x: number, y: number, r = 3.6) => <circle cx={x} cy={y} r={r} fill={O} />;
 
 export const EYES: HeadPart[] = [
   { id: 'classic', name: 'Classic', quip: 'Two big ovals, two tiny dots. Timeless. Like a dinner plate with opinions.', render: (c) => eyePair(c) },
@@ -74,7 +80,7 @@ export const EYES: HeadPart[] = [
     id: 'sleepy',
     name: 'Sleepy',
     quip: 'Woke up like this. Then went back to sleep. Then woke up like this again.',
-    render: (c) => eyePair(c, { lid: 'sleepy', pupil: (s) => dot(s * 12, 12) }),
+    render: (c) => eyePair(c, { lid: 'sleepy', pupil: (s) => dot(s * 16, 12) }),
   },
   {
     id: 'shifty',
@@ -87,7 +93,7 @@ export const EYES: HeadPart[] = [
     id: 'sad',
     name: 'Sad',
     quip: 'Just found out the ice-cream truck plays music when it is OUT of ice cream.',
-    render: (c) => eyePair(c, { lid: 'sad', pupil: (s) => dot(s * 12, 8) }),
+    render: (c) => eyePair(c, { lid: 'sad', pupil: (s) => dot(s * 16, 8) }),
   },
   {
     id: 'crazy',
@@ -337,7 +343,8 @@ export const BROWS: HeadPart[] = [
 
 /* --------------------------------------------------------------- mouths */
 
-const MOUTH_DARK = '#4a1414';
+// The show's mouths are near-black inside, with a hint of plum.
+const MOUTH_DARK = '#2b1b22';
 const TONGUE = '#ef7a86';
 
 export const MOUTHS: HeadPart[] = [
@@ -351,7 +358,7 @@ export const MOUTHS: HeadPart[] = [
         <path d="M -24 52 Q 0 56 24 52 Q 20 82 0 84 Q -20 82 -24 52 Z" fill={MOUTH_DARK} {...ink} />
         <path d="M -21 55 Q 0 58 21 55 L 20 62 Q 0 64 -20 62 Z" fill="#fff" />
         <path d="M -12 78 Q 0 70 12 78 Q 6 83 0 83 Q -6 83 -12 78 Z" fill={TONGUE} />
-        <path d="M -24 52 Q 0 56 24 52 Q 20 82 0 84 Q -20 82 -24 52 Z" fill="none" {...ink} />
+        <path d="M -24 52 Q 0 56 24 52 Q 20 82 0 84 Q -20 82 -24 52 Z" {...edge} />
       </g>
     ),
   },
@@ -366,7 +373,7 @@ export const MOUTHS: HeadPart[] = [
         <ellipse cx={0} cy={66} rx={20} ry={22} fill={MOUTH_DARK} />
         <path d="M -16 54 Q 0 48 16 54 L 14 58 Q 0 54 -14 58 Z" fill="#fff" />
         <ellipse cx={0} cy={80} rx={12} ry={6} fill={TONGUE} />
-        <ellipse cx={0} cy={66} rx={20} ry={22} fill="none" {...ink} />
+        <ellipse cx={0} cy={66} rx={20} ry={22} {...edge} />
       </g>
     ),
   },
@@ -405,7 +412,7 @@ export const MOUTHS: HeadPart[] = [
         {[-14, -5, 5, 14].map((x) => (
           <rect key={x} x={x - 2.5} y={58} width={5} height={5} fill="#c9d1d9" stroke="#555" strokeWidth={0.8} />
         ))}
-        <path d="M -24 52 Q 0 56 24 52 Q 20 80 0 82 Q -20 80 -24 52 Z" fill="none" {...ink} />
+        <path d="M -24 52 Q 0 56 24 52 Q 20 80 0 82 Q -20 80 -24 52 Z" {...edge} />
       </g>
     ),
   },
@@ -429,7 +436,7 @@ export const MOUTHS: HeadPart[] = [
       <g>
         <path d="M -22 54 Q 0 58 22 54 Q 18 78 0 80 Q -18 78 -22 54 Z" fill={MOUTH_DARK} />
         <path d="M -20 56 Q -8 58 -4 58 L -4 65 Q -12 65 -19 63 Z M 4 58 Q 8 58 20 56 L 19 63 Q 12 65 4 65 Z" fill="#fff" />
-        <path d="M -22 54 Q 0 58 22 54 Q 18 78 0 80 Q -18 78 -22 54 Z" fill="none" {...ink} />
+        <path d="M -22 54 Q 0 58 22 54 Q 18 78 0 80 Q -18 78 -22 54 Z" {...edge} />
       </g>
     ),
   },
@@ -482,7 +489,7 @@ export function talkingMouth(open: number): ReactNode {
     <g>
       <ellipse cx={0} cy={64} rx={15} ry={ry} fill={MOUTH_DARK} />
       <ellipse cx={0} cy={64 + ry * 0.55} rx={9} ry={ry * 0.35} fill={TONGUE} />
-      <ellipse cx={0} cy={64} rx={15} ry={ry} fill="none" {...ink} />
+      <ellipse cx={0} cy={64} rx={15} ry={ry} {...edge} />
     </g>
   );
 }
@@ -698,7 +705,18 @@ export const FACIAL_HAIR: FacialHairDef[] = [
     id: 'stubble',
     name: 'Stubble',
     quip: "Hasn't shaved since the divorce. Which divorce? Exactly.",
-    under: (c) => <path d={BEARD_FULL} fill={c.color} opacity={0.3} />,
+    under: (c) => {
+      // Stubble stays on the face: clip it to the head so it never hangs below the chin.
+      const id = c.uid('stubble');
+      return (
+        <g>
+          <clipPath id={id}>
+            <path d={(HEAD_SHAPES[c.c.headShape] ?? HEAD_SHAPES.round).path} transform="translate(0 -6)" />
+          </clipPath>
+          <path d={BEARD_FULL} fill={c.color} opacity={0.3} clipPath={`url(#${id})`} />
+        </g>
+      );
+    },
   },
   {
     id: 'mustache',

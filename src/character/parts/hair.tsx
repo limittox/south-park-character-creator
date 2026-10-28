@@ -18,7 +18,6 @@ export const HAIR: HairDef[] = [
     id: 'bald',
     name: 'Bald',
     quip: 'Aerodynamic. Reflects sunlight into enemy eyes.',
-    front: () => <path d="M -60 -88 Q -30 -104 0 -100" fill="none" stroke="#fff" strokeWidth={6} strokeLinecap="round" opacity={0.55} />,
   },
   {
     id: 'buzz',
@@ -90,11 +89,12 @@ export const HAIR: HairDef[] = [
   {
     id: 'long',
     name: 'Long & Straight',
+    // Like the show: the long part hangs behind the round head; only the crown and fringe sit in front.
     quip: 'Washes it with the tears of their enemies. And conditioner.',
-    back: (c) => <path d="M -140 -20 C -144 -104 -74 -128 0 -128 C 74 -128 144 -104 140 -20 L 148 196 Q 0 214 -148 196 Z" {...fill(shade(c.color, -0.12))} />,
+    back: (c) => <path d="M -140 -20 C -144 -104 -74 -128 0 -128 C 74 -128 140 -104 136 -20 L 136 100 Q 136 134 110 138 L -110 138 Q -136 134 -136 100 Z" {...fill(shade(c.color, -0.12))} />,
     front: (c) => (
       <path
-        d="M -134 160 L -138 -20 C -140 -100 -72 -126 0 -126 C 72 -126 140 -100 138 -20 L 134 160 L 110 160 L 110 -16 C 104 -38 92 -46 80 -46 L -80 -46 C -92 -46 -104 -38 -110 -16 L -110 160 Z"
+        d="M -132 14 L -134 -20 C -136 -100 -72 -126 0 -126 C 72 -126 136 -100 134 -20 L 132 14 Q 120 -6 106 -16 C 100 -38 90 -46 80 -46 L -80 -46 C -90 -46 -100 -38 -106 -16 Q -120 -6 -132 14 Z"
         {...fill(c.color)}
       />
     ),
@@ -281,7 +281,6 @@ export const HAIR: HairDef[] = [
     quip: 'Hair said goodbye. The sides did not get the memo.',
     front: (c) => (
       <g>
-        <path d="M -60 -88 Q -30 -104 0 -100" fill="none" stroke="#fff" strokeWidth={6} strokeLinecap="round" opacity={0.5} />
         <Mirror>
           <path d={`M -130 -46 ${scallopEdge(-130, -46, -116, 32, 4, -6)} L -104 4 C -108 -16 -112 -36 -114 -56 Z`} {...fill(c.color)} strokeWidth={2.2} />
         </Mirror>

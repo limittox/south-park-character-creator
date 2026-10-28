@@ -22,6 +22,8 @@ interface Actor {
   y: number;
   s: number;
   flip: boolean;
+  /** Three-quarter turn: -1 looks screen-left, 1 screen-right. */
+  turn: number;
   bubble: string;
 }
 
@@ -41,8 +43,9 @@ const makeActor = (c: CharacterState, i: number, n: number, groundY: number): Ac
   c,
   x: n === 1 ? SCENE_W / 2 : 260 + (i * (SCENE_W - 520)) / Math.max(1, n - 1),
   y: groundY,
-  s: n === 1 ? 1.15 : n > 4 ? 0.8 : 1,
+  s: n === 1 ? 1.35 : n > 4 ? 0.95 : 1.2,
   flip: false,
+  turn: 0,
   bubble: '',
 });
 
@@ -97,7 +100,9 @@ export function PhotoBooth({ current, crew, initialCast }: Props) {
   const [shot, setShot] = useState<{ url: string; blob: Blob } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const sceneRef = useRef<SVGSVGElement>(null);
-  const dragRef = useRef<{ key: string; dx: number; dy: number } | null>(null);
+  const dragRef = useRef<{ key: string; dx: number; dy: number; lastX: number } | null>(null);
+  // Whoever is being dragged hops along, facing the way they're going.
+  const [drag, setDrag] = useState<{ key: string; dir: number } | null>(null);
 
   const selected = actors.find((a) => a.key === sel) ?? null;
   const update = (key: string, patch: Partial<Actor>) => setActors((list) => list.map((a) => (a.key === key ? { ...a, ...patch } : a)));
@@ -121,7 +126,8 @@ export function PhotoBooth({ current, crew, initialCast }: Props) {
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     const p = toScene(e);
-    dragRef.current = { key: a.key, dx: a.x - p.x, dy: a.y - p.y };
+    dragRef.current = { key: a.key, dx: a.x - p.x, dy: a.y - p.y, lastX: p.x };
+    setDrag({ key: a.key, dir: 0 });
     setSel(a.key);
     setActors((list) => [...list.filter((x) => x.key !== a.key), a]);
   };
@@ -130,9 +136,14 @@ export function PhotoBooth({ current, crew, initialCast }: Props) {
     if (!d) return;
     const p = toScene(e);
     update(d.key, { x: Math.round(p.x + d.dx), y: Math.round(Math.min(SCENE_H + 200, Math.max(200, p.y + d.dy))) });
+    if (Math.abs(p.x - d.lastX) > 6) {
+      setDrag({ key: d.key, dir: Math.sign(p.x - d.lastX) });
+      d.lastX = p.x;
+    }
   };
   const onUp = () => {
     dragRef.current = null;
+    setDrag(null);
   };
 
   // Delete removes the selected actor, arrows nudge it.
@@ -166,7 +177,7 @@ export function PhotoBooth({ current, crew, initialCast }: Props) {
         bestX = x;
       }
     }
-    const a = { ...makeActor(c, 0, 1, scene.groundY), x: bestX, s: actors.length > 3 ? 0.85 : 1 };
+    const a = { ...makeActor(c, 0, 1, scene.groundY), x: bestX, s: actors.length > 3 ? 1 : 1.2 };
     setActors((list) => [...list, a]);
     setSel(a.key);
     sfx.pop();
@@ -207,7 +218,7 @@ export function PhotoBooth({ current, crew, initialCast }: Props) {
 
   const sceneContent = (
     <svg ref={sceneRef} x={layout.sx} y={layout.sy} width={SCENE_W} height={SCENE_H} viewBox={`0 0 ${SCENE_W} ${SCENE_H}`} overflow="hidden">
-      <g onPointerDown={() => setSel(null)}>{scene.render({ townName, studioColor })}</g>
+      <g className="sp-scene" onPointerDown={() => setSel(null)}>{scene.render({ townName, studioColor })}</g>
       {actors.map((a) => (
         <g
           key={a.key}
@@ -216,9 +227,16 @@ export function PhotoBooth({ current, crew, initialCast }: Props) {
           onPointerDown={onActorDown(a)}
         >
           {a.key === sel && <ellipse data-export-ignore cx={200} cy={484} rx={120} ry={16} fill="#ffe14d" opacity={0.8} stroke="#1d1d1d" strokeWidth={3} strokeDasharray="10 6" />}
-          <CharacterGroup c={a.c} />
+          <g className={drag?.key === a.key ? 'hop' : undefined}>
+            <CharacterGroup c={a.c} turn={(a.flip ? -1 : 1) * (drag?.key === a.key && drag.dir ? drag.dir : a.turn)} />
+          </g>
         </g>
       ))}
+      {scene.front && (
+        <g className="sp-scene" pointerEvents="none">
+          {scene.front({ townName, studioColor })}
+        </g>
+      )}
       {weather !== 'none' && (
         <g className={weather === 'snow' ? 'snow-anim' : undefined}>
           <WeatherLayer weather={weather} />
@@ -319,7 +337,10 @@ export function PhotoBooth({ current, crew, initialCast }: Props) {
                   sfx.pop();
                 }}
               >
-                <svg viewBox={`0 0 ${SCENE_W} ${SCENE_H}`}>{s.render({ townName, studioColor })}</svg>
+                <svg viewBox={`0 0 ${SCENE_W} ${SCENE_H}`} className="sp-scene">
+                  {s.render({ townName, studioColor })}
+                  {s.front?.({ townName, studioColor })}
+                </svg>
                 <span>{s.name}</span>
               </button>
             ))}
@@ -395,7 +416,7 @@ export function PhotoBooth({ current, crew, initialCast }: Props) {
             </div>
             <div className="field">
               <label htmlFor="size">Size</label>
-              <input id="size" type="range" min={0.4} max={1.7} step={0.05} value={selected.s} onChange={(e) => update(selected.key, { s: Number(e.target.value) })} />
+              <input id="size" type="range" min={0.5} max={2} step={0.05} value={selected.s} onChange={(e) => update(selected.key, { s: Number(e.target.value) })} />
             </div>
             <div className="field">
               <span className="lbl">Mood</span>
@@ -408,6 +429,22 @@ export function PhotoBooth({ current, crew, initialCast }: Props) {
                     </button>
                   );
                 })}
+              </div>
+            </div>
+            <div className="field">
+              <span className="lbl">Look</span>
+              <div className="chips">
+                {(
+                  [
+                    [-1, '👈 Left'],
+                    [0, 'At camera'],
+                    [1, 'Right 👉'],
+                  ] as const
+                ).map(([turn, label]) => (
+                  <button key={turn} className="chip-btn" aria-pressed={selected.turn === turn} onClick={() => update(selected.key, { turn })}>
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="row">

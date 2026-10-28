@@ -290,7 +290,7 @@ export function PhotoConverter({ base, onApply, onClose }: Props) {
           {preview && traits ? (
             <>
               <div className="preview-card">
-                <CharacterSvg c={preview} viewBox="-40 -70 480 570" />
+                <CharacterSvg c={preview} />
               </div>
               <h3 style={{ fontFamily: 'var(--display)', fontWeight: 400, margin: '12px 0 8px' }}>Our scientists detected:</h3>
               <div className="trait-list">

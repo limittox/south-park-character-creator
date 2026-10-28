@@ -1,4 +1,5 @@
 import fontUrl from '@fontsource/luckiest-guy/files/luckiest-guy-latin-400-normal.woff2?url';
+import { FLAT_CSS } from '../character/flat';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 let fontCss: Promise<string> | null = null;
@@ -36,7 +37,7 @@ export async function svgToBlob(svg: SVGSVGElement, opts: ExportOptions): Promis
   clone.setAttribute('height', String(height));
   clone.querySelectorAll('[data-export-ignore]').forEach((n) => n.remove());
   const style = document.createElementNS(SVG_NS, 'style');
-  style.textContent = await getFontCss();
+  style.textContent = (await getFontCss()) + FLAT_CSS;
   clone.insertBefore(style, clone.firstChild);
 
   const xml = new XMLSerializer().serializeToString(clone);

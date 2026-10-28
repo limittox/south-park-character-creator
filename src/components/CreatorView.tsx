@@ -11,6 +11,7 @@ import { NEWS_TEMPLATES, POKE_REACTIONS, RANDOM_QUIPS, TALK_SUGGESTIONS } from '
 import { muffle, speak, VOICES } from '../lib/speech';
 import { HATS } from '../character/parts/hats';
 import { StageBackdrop } from '../scenes/backgrounds';
+import { charFrame, getGeo, GROUND_Y } from '../character/geometry';
 
 interface Props {
   c: CharacterState;
@@ -26,7 +27,14 @@ interface Props {
   onShare: () => void;
 }
 
-const STAGE_VIEWBOX = '-95 -78 590 590';
+const LOOKS = [0, 0.9, -0.9];
+
+/** Square stage view that fits the whole character, feet a little above the bottom edge. */
+function stageViewBox(c: CharacterState): string {
+  const f = charFrame(getGeo(c.body, c.headShape));
+  const size = GROUND_Y + 40 - f.y;
+  return `${f.x + f.w / 2 - size / 2} ${f.y} ${size} ${size}`;
+}
 
 export function CreatorView({ c, set, undo, redo, canUndo, canRedo, onSave, onCard, onPhoto, onBooth, onShare }: Props) {
   const [activeCat, setActiveCat] = useState<CategoryId>('hair');
@@ -108,6 +116,35 @@ export function CreatorView({ c, set, undo, redo, canUndo, canRedo, onSave, onCa
 
   useEffect(() => () => stopRef.current?.(), []);
 
+  // Turn the head: front, right, left. The show turns characters by sliding the face across the head.
+  const [lookIdx, setLookIdx] = useState(0);
+  const turnHead = () => {
+    setLookIdx((i) => (i + 1) % LOOKS.length);
+    sfx.click();
+  };
+
+  // Walk: a stop-motion hop back and forth across the stage, facing the way it's going.
+  const [walk, setWalk] = useState<{ x: number; y: number; dir: number } | null>(null);
+  const walkTimer = useRef<number | undefined>(undefined);
+  const stopWalk = () => {
+    window.clearInterval(walkTimer.current);
+    walkTimer.current = undefined;
+    setWalk(null);
+  };
+  const toggleWalk = () => {
+    if (walkTimer.current) return stopWalk();
+    const HOP = [0, -9, -14, -9];
+    const LAP = 2 * Math.PI * 10;
+    let t = 0;
+    sfx.boing();
+    walkTimer.current = window.setInterval(() => {
+      t += 1;
+      if (t > LAP * 2) return stopWalk();
+      setWalk({ x: Math.sin(t / 10) * 110, y: HOP[t % HOP.length], dir: Math.cos(t / 10) >= 0 ? 1 : -1 });
+    }, 90);
+  };
+  useEffect(() => () => window.clearInterval(walkTimer.current), []);
+
   const toot = () => {
     sfx.fart();
     setShake((s) => s + 1);
@@ -142,12 +179,12 @@ export function CreatorView({ c, set, undo, redo, canUndo, canRedo, onSave, onCa
       <div className="stage-col">
         <div className="panel stage-panel">
           <div className="stage">
-            <svg className="stage-svg" viewBox={STAGE_VIEWBOX} aria-label={`${c.name}, your character. Click a body part to change it.`} role="img">
+            <svg className="stage-svg" viewBox={stageViewBox(c)} aria-label={`${c.name}, your character. Click a body part to change it.`} role="img">
               <StageBackdrop />
               <g key={`s${shake}`} className={shake ? 'char-wrap shake' : 'char-wrap'}>
                 <g key={`p${popKey}`} className={popKey ? 'char-wrap pop' : 'char-wrap'} style={{ transformOrigin: '200px 480px', transformBox: 'view-box' }}>
-                  <g transform={`translate(0 ${bob})`}>
-                    <CharacterGroup c={c} talk={talk} onPartClick={onPartClick} />
+                  <g transform={`translate(${walk?.x ?? 0} ${(walk?.y ?? 0) + bob})`}>
+                    <CharacterGroup c={c} talk={talk} turn={walk ? walk.dir * 0.9 : LOOKS[lookIdx]} onPartClick={onPartClick} />
                   </g>
                 </g>
               </g>
@@ -162,6 +199,12 @@ export function CreatorView({ c, set, undo, redo, canUndo, canRedo, onSave, onCa
               </button>
               <button className="icon-btn" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)" aria-label="Redo">
                 ↪️
+              </button>
+              <button className="icon-btn" onClick={turnHead} title="Turn head" aria-label="Turn head">
+                👀
+              </button>
+              <button className="icon-btn" onClick={toggleWalk} aria-pressed={!!walk} title={walk ? 'Stop walking' : 'Walk around'} aria-label={walk ? 'Stop walking' : 'Walk around'}>
+                🚶
               </button>
               <button className="icon-btn" onClick={toot} title="Pull my finger" aria-label="Pull my finger">
                 💨

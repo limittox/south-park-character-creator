@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { BodyGeo, ItemBase, Render, RenderCtx } from '../../types';
 import { accent, inkOn, shade } from '../../lib/color';
 import { torsoHalfWidthAt, torsoPath } from '../geometry';
-import { heartPath, ink, O, scallop, scallopEdge, starPath } from './common';
+import { edge, heartPath, ink, O, scallop, scallopEdge, starPath } from './common';
 
 export const chinY = (g: BodyGeo) => g.headCy + g.headRy * 0.97;
 
@@ -21,7 +21,7 @@ function torsoClip(c: RenderCtx, children: ReactNode, key = 'torso') {
 }
 
 const base = (c: RenderCtx, color = c.color) => <path d={torsoPath(c.g)} {...f(color)} />;
-const outline = (c: RenderCtx) => <path d={torsoPath(c.g)} fill="none" {...ink} />;
+const outline = (c: RenderCtx) => <path d={torsoPath(c.g)} {...edge} />;
 
 function hem(c: RenderCtx, color: string, h = 14) {
   const { g } = c;
@@ -81,6 +81,30 @@ export const TOPS: TopDef[] = [
           <circle cx={x - 7} cy={y - 3} r={1.8} fill={O} />
           <circle cx={x + 9} cy={y - 3} r={1.8} fill={O} />
           <path d={`M ${x - 10} ${y + 8} Q ${x} ${y + 15} ${x + 10} ${y + 8}`} fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" />
+        </g>
+      );
+    },
+  },
+  {
+    id: 'coat',
+    name: 'Winter Coat',
+    quip: 'Standard issue in a town that is 90% snow. The other 10% is also snow.',
+    defaultColor: '#d33b2c',
+    sleeves: 'long',
+    mittens: (c) => accent(c.color),
+    // The show's kid coat: a centre seam, a row of buttons down one side and a collar band
+    // peeking out under the chin in the same colour as the mittens.
+    torso: (c) => {
+      const { g } = c;
+      const ch = chinY(g);
+      const n = Math.max(2, Math.round((g.torsoBottom - ch) / 28));
+      return (
+        <g>
+          {base(c)}
+          {torsoClip(c, <path d={`M ${g.cx - 220} ${ch - 4} Q ${g.cx} ${ch + 24} ${g.cx + 220} ${ch - 4} L ${g.cx + 220} ${ch - 80} L ${g.cx - 220} ${ch - 80} Z`} fill={accent(c.color)} />, 'collar')}
+          <path d={`M ${g.cx} ${ch + 6} L ${g.cx} ${g.torsoBottom + 3}`} stroke={O} strokeWidth={2.5} />
+          {buttons(c, g.cx - 10, ch + 22, g.torsoBottom - 14, n, O)}
+          {outline(c)}
         </g>
       );
     },
@@ -656,7 +680,7 @@ export const TOPS: TopDef[] = [
               return <path key={i} d={zz} fill="none" stroke={['#f2c230', '#2e8b47', '#d33b2c'][i]} strokeWidth={6} />;
             })}
           </g>
-          <path d={d} fill="none" {...ink} />
+          <path d={d} {...edge} />
         </g>
       );
     },
@@ -998,7 +1022,7 @@ export const BOTTOMS: BottomDef[] = [
               ))}
             </g>,
           )}
-          <path d={legsPath(g)} fill="none" {...ink} />
+          <path d={legsPath(g)} {...edge} />
         </g>
       );
     },
@@ -1021,7 +1045,7 @@ export const BOTTOMS: BottomDef[] = [
               ))}
             </g>,
           )}
-          <path d={legsPath(g)} fill="none" {...ink} />
+          <path d={legsPath(g)} {...edge} />
         </g>
       );
     },
@@ -1050,7 +1074,7 @@ export const BOTTOMS: BottomDef[] = [
               <rect key={`h${i}`} x={g.cx - 140} y={g.legTop - 12 + i * 18} width={280} height={6} fill="#d33b2c" />
             ))}
           </g>
-          <path d={d} fill="none" {...ink} />
+          <path d={d} {...edge} />
         </g>
       );
     },
@@ -1148,6 +1172,13 @@ function bootShaft(c: RenderCtx, x: number, h: number) {
 }
 
 export const SHOES: ShoeDef[] = [
+  {
+    id: 'plain',
+    name: 'Regular Shoes',
+    quip: 'Black. Flat. Exactly like every other kid at the bus stop. Blending in is a survival skill.',
+    defaultColor: '#1f1f22',
+    render: (c) => feet(c, (x, y, rx, ry) => <path d={footDome(x, y, rx, ry)} {...f(c.color)} />),
+  },
   {
     id: 'sneakers',
     name: 'Sneakers',

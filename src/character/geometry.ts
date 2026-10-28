@@ -4,34 +4,40 @@ import type { BodyGeo } from '../types';
 export const HEAD_RX = 128;
 export const HEAD_RY = 110;
 
-/** viewBox used to frame a whole character. Ground sits at y = 480. */
-export const CHAR_VIEWBOX = { x: -60, y: -70, w: 520, h: 570 };
+/** Characters stand on the ground at y = 480 (character coordinates). */
 export const GROUND_Y = 480;
 
+/*
+ * Proportions follow the show's cut-outs, measured in head radii (R):
+ * kids are a near-round head (ry ≈ 1.03 R) sitting on a stubby body whose feet
+ * are only ~1.9 R below the head's centre, with a sliver of trouser and flat shoes.
+ * Adults have a smaller head on a long body, about 1.6× a kid's height. The heavy grown-up
+ * is broad with a long torso and short legs; the beanpole has stick-thin arms and legs.
+ */
 const kid: BodyGeo = {
   cx: 200,
   headCx: 200,
-  headCy: 178,
-  headRx: 126,
-  headRy: 108,
-  torsoTop: 262,
-  torsoBottom: 410,
-  shoulder: 76,
-  hip: 96,
+  headCy: 272,
+  headRx: 110,
+  headRy: 114,
+  torsoTop: 330,
+  torsoBottom: 452,
+  shoulder: 66,
+  hip: 80,
   belly: 0,
-  legTop: 396,
-  legBottom: 462,
-  legSep: 25,
-  legW: 46,
-  footY: 470,
-  footRx: 33,
-  footRy: 14,
-  footSep: 31,
-  shoulderY: 292,
-  handX: 104,
-  handY: 384,
-  handR: 17,
-  armW: 30,
+  legTop: 446,
+  legBottom: 474,
+  legSep: 38,
+  legW: 78,
+  footY: 477,
+  footRx: 44,
+  footRy: 9,
+  footSep: 44,
+  shoulderY: 348,
+  handX: 94,
+  handY: 427,
+  handR: 12,
+  armW: 26,
   isAdult: false,
 };
 
@@ -39,96 +45,190 @@ export const BODY_GEOS: Record<string, BodyGeo> = {
   kid,
   husky: {
     ...kid,
-    headRx: 134,
-    headRy: 110,
-    shoulder: 92,
-    hip: 124,
-    belly: 16,
-    legSep: 33,
-    legW: 56,
-    footSep: 40,
-    footRx: 36,
-    handX: 132,
-    handY: 382,
-    armW: 34,
+    headCy: 290,
+    headRx: 126,
+    headRy: 104,
+    torsoTop: 340,
+    torsoBottom: 450,
+    shoulder: 100,
+    hip: 140,
+    belly: 22,
+    legTop: 440,
+    legSep: 56,
+    legW: 108,
+    footSep: 62,
+    footRx: 54,
+    shoulderY: 362,
+    handX: 160,
+    handY: 398,
+    handR: 16,
+    armW: 36,
   },
   skinny: {
     ...kid,
-    headRx: 118,
-    headRy: 104,
-    headCy: 180,
-    shoulder: 62,
-    hip: 74,
-    legSep: 19,
-    legW: 34,
-    footSep: 24,
-    footRx: 28,
-    handX: 84,
-    handY: 386,
+    headCy: 287,
+    headRx: 102,
+    headRy: 106,
+    torsoTop: 340,
+    torsoBottom: 455,
+    shoulder: 54,
+    hip: 66,
+    legTop: 448,
+    legSep: 28,
+    legW: 56,
+    footSep: 32,
+    footRx: 32,
+    shoulderY: 362,
+    handX: 82,
+    handY: 432,
+    handR: 10.5,
     armW: 24,
   },
   adult: {
     ...kid,
-    headCy: 122,
-    headRx: 114,
-    headRy: 96,
-    torsoTop: 196,
-    torsoBottom: 384,
-    shoulder: 84,
-    hip: 94,
-    legTop: 370,
-    legBottom: 462,
-    legSep: 26,
-    legW: 46,
-    shoulderY: 228,
-    handX: 110,
-    handY: 352,
+    headCy: 57,
+    headRx: 82,
+    headRy: 85,
+    torsoTop: 128,
+    torsoBottom: 300,
+    shoulder: 70,
+    hip: 76,
+    legTop: 290,
+    legBottom: 464,
+    legSep: 29,
+    legW: 58,
+    footY: 472,
+    footRx: 34,
+    footRy: 12,
+    footSep: 32,
+    shoulderY: 150,
+    handX: 86,
+    handY: 280,
+    handR: 12,
+    armW: 22,
     isAdult: true,
   },
   dadbod: {
     ...kid,
-    headCy: 122,
-    headRx: 118,
-    headRy: 98,
-    torsoTop: 196,
-    torsoBottom: 388,
+    headCy: 58,
+    headRx: 86,
+    headRy: 88,
+    torsoTop: 130,
+    torsoBottom: 336,
     shoulder: 96,
-    hip: 126,
-    belly: 22,
-    legTop: 372,
-    legBottom: 462,
-    legSep: 34,
-    legW: 56,
-    footSep: 40,
-    footRx: 36,
-    shoulderY: 228,
-    handX: 138,
-    handY: 352,
-    armW: 34,
+    hip: 120,
+    belly: 26,
+    legTop: 326,
+    legBottom: 466,
+    legSep: 50,
+    legW: 96,
+    footSep: 54,
+    footRx: 46,
+    footY: 472,
+    footRy: 12,
+    shoulderY: 156,
+    handX: 136,
+    handY: 262,
+    handR: 14,
+    armW: 30,
+    isAdult: true,
+  },
+  // Broad shoulders over narrow hips, thick arms: the show's gym-going grown-ups.
+  buff: {
+    ...kid,
+    headCy: 54,
+    headRx: 78,
+    headRy: 81,
+    torsoTop: 124,
+    torsoBottom: 300,
+    shoulder: 104,
+    hip: 66,
+    legTop: 290,
+    legBottom: 466,
+    legSep: 30,
+    legW: 52,
+    footY: 472,
+    footRx: 34,
+    footRy: 12,
+    footSep: 32,
+    shoulderY: 140,
+    handX: 112,
+    handY: 276,
+    handR: 15,
+    armW: 32,
     isAdult: true,
   },
   lanky: {
     ...kid,
-    headCy: 104,
-    headRx: 104,
-    headRy: 90,
-    torsoTop: 172,
-    torsoBottom: 370,
-    shoulder: 66,
-    hip: 72,
-    legTop: 356,
-    legBottom: 462,
-    legSep: 20,
-    legW: 34,
-    footSep: 24,
-    footRx: 30,
-    shoulderY: 204,
-    handX: 88,
-    handY: 342,
-    armW: 24,
+    headCy: 28,
+    headRx: 74,
+    headRy: 77,
+    torsoTop: 92,
+    torsoBottom: 284,
+    shoulder: 48,
+    hip: 46,
+    legTop: 282,
+    legBottom: 466,
+    legSep: 14,
+    legW: 27,
+    footSep: 18,
+    footRx: 25,
+    footY: 472,
+    footRy: 11,
+    shoulderY: 112,
+    handX: 58,
+    handY: 268,
+    handR: 10,
+    armW: 15,
     isAdult: true,
   },
 };
+
+/**
+ * Face parts are drawn against the older, flatter head and nudged into the show's
+ * layout here: big eyes that meet in the middle and tuck under hat brims, and a
+ * small mouth down near the chin.
+ */
+export const FACE_FIT = {
+  eyes: 'translate(0 6) scale(1.3 1)',
+  mouth: 'translate(0 18)',
+  jaw: 'translate(0 6)',
+  nose: 'translate(0 14)',
+  detail: 'translate(0 8)',
+  gear: 'translate(0 6) scale(1.2 1)',
+};
+
+/** Grown-ups have more chin: eyes sit at the middle of the head and the mouth about halfway down to the chin. */
+export const ADULT_FACE_FIT: typeof FACE_FIT = {
+  eyes: 'translate(0 0) scale(1.3 1)',
+  mouth: 'translate(0 -7)',
+  jaw: 'translate(0 -6)',
+  nose: 'translate(0 2)',
+  detail: 'translate(0 2)',
+  gear: 'translate(0 0) scale(1.2 1)',
+};
+
+/**
+ * Head shapes stretch everything drawn on the head. Eyes keep the show's shape on any head:
+ * the extra vertical scale undoes the head's stretch relative to the round kid head.
+ */
+export function eyeFit(fit: typeof FACE_FIT, g: BodyGeo): string {
+  const stretch = g.headRy / HEAD_RY / (g.headRx / HEAD_RX);
+  return `${fit.eyes} scale(1 ${(1.2 / stretch).toFixed(3)})`;
+}
+
+/** Box that frames a whole character standing on the ground, with room for tall hats and a sidekick. */
+export function charFrame(g: BodyGeo): { x: number; y: number; w: number; h: number } {
+  const top = g.headCy - g.headRy * 2.1;
+  const h = GROUND_Y + 24 - top;
+  const w = Math.max(h * 0.9, 500);
+  return { x: g.cx - w / 2, y: top, w, h };
+}
+
+export function frameViewBox(g: BodyGeo): string {
+  const f = charFrame(g);
+  return `${f.x} ${f.y} ${f.w} ${f.h}`;
+}
 
 export interface HeadShape {
   sx: number;
@@ -162,7 +262,7 @@ export const HEAD_SHAPES: Record<string, HeadShape> = {
 };
 
 /** Where the Canadian head splits when it talks (head coordinates). */
-export const CANADIAN_SPLIT_Y = 40;
+export const CANADIAN_SPLIT_Y = 56;
 
 export function getGeo(body: string, headShape: string): BodyGeo {
   const base = BODY_GEOS[body] ?? BODY_GEOS.kid;

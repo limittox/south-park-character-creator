@@ -7,6 +7,7 @@ export const BODY_TYPES: ItemBase[] = [
   { id: 'adult', name: 'Grown-Up', quip: 'Pays taxes. Cries in the car. Says "back in my day".' },
   { id: 'dadbod', name: 'Dad Bod', quip: 'Owns a grill. Has opinions about lawns. Makes the same joke every Thanksgiving.' },
   { id: 'lanky', name: 'Beanpole', quip: 'Gets asked about basketball daily. Hates basketball.' },
+  { id: 'buff', name: 'Gym Bro', quip: 'Never skips arm day. Skips leg day, brain day and every other day.' },
 ];
 
 export const HEAD_SHAPE_ITEMS: ItemBase[] = [

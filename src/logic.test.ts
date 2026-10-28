@@ -10,6 +10,8 @@ import { wrapSign } from './character/parts/held';
 import { muffle } from './lib/speech';
 import { accent, deltaE, hexToRgb, nearest, rgbToHex, shade } from './lib/color';
 import { makeProfile, wrapText } from './components/CharacterCard';
+import { BODY_GEOS, charFrame, GROUND_Y } from './character/geometry';
+import { FLAT_CSS } from './character/flat';
 
 describe('share links', () => {
   it('round-trips a character and never includes the photo face', () => {
@@ -68,6 +70,55 @@ describe('catalog', () => {
       if (!field || cat === 'skin' || cat === 'hairColor') continue;
       expect(findItem(cat, String(DEFAULT_CHARACTER[field])), cat).toBeDefined();
     }
+  });
+});
+
+describe('show proportions', () => {
+  const height = (body: string) => GROUND_Y + 4 - (BODY_GEOS[body].headCy - BODY_GEOS[body].headRy);
+
+  it('gives kids near-round heads', () => {
+    for (const body of ['kid', 'skinny']) {
+      const g = BODY_GEOS[body];
+      expect(g.headRy / g.headRx).toBeGreaterThan(0.98);
+      expect(g.headRy / g.headRx).toBeLessThan(1.1);
+    }
+  });
+
+  it('makes grown-ups about one and a half kids tall', () => {
+    for (const adult of ['adult', 'dadbod', 'lanky', 'buff']) {
+      const ratio = height(adult) / height('kid');
+      expect(ratio).toBeGreaterThan(1.4);
+      expect(ratio).toBeLessThan(1.8);
+    }
+  });
+
+  it('frames every body with room for a tall hat and the feet', () => {
+    for (const g of Object.values(BODY_GEOS)) {
+      const f = charFrame(g);
+      expect(f.y).toBeLessThan(g.headCy - g.headRy * 2);
+      expect(f.y + f.h).toBeGreaterThan(g.footY + g.footRy + 10);
+      expect(f.x).toBeLessThan(g.cx - 186 - 40);
+    }
+  });
+});
+
+describe('flat show style', () => {
+  const selector = FLAT_CSS.slice(0, FLAT_CSS.indexOf('{'));
+  const el = (markup: string) => {
+    const root = document.createElement('div');
+    root.innerHTML = `<svg><g class="sp-char">${markup}</g></svg>`;
+    return root.querySelector('g > *')!;
+  };
+
+  it('drops outlines from filled shapes', () => {
+    expect(el('<path stroke="#1d1d1d" fill="#fcd9b8"/>').matches(selector)).toBe(true);
+    expect(el('<path class="ol" stroke="#1d1d1d" fill="none"/>').matches(selector)).toBe(true);
+  });
+
+  it('keeps interior lines and deliberate outlines', () => {
+    expect(el('<path stroke="#1d1d1d" fill="none"/>').matches(selector)).toBe(false);
+    expect(el('<path stroke="#1d1d1d"/>').matches(selector)).toBe(false);
+    expect(el('<path class="keep" stroke="#1d1d1d" fill="#fff"/>').matches(selector)).toBe(false);
   });
 });
 

@@ -1,6 +1,6 @@
 import type { ItemBase, Render } from '../../types';
 import { accent, shade } from '../../lib/color';
-import { ink, Mirror, O, scallop, scallopEdge, starPath } from './common';
+import { edge, ink, Mirror, O, scallop, scallopEdge, starPath } from './common';
 
 export interface HatDef extends ItemBase {
   back?: Render;
@@ -12,12 +12,36 @@ export interface HatDef extends ItemBase {
   hidesFace?: boolean;
   /** Speech comes out as "mmmph". */
   muffles?: boolean;
+  /** Eyes (and brows and glasses) are drawn over the hat, like eyes peeking out over a hood's fur. */
+  eyesOver?: boolean;
 }
 
 const f = (color: string) => ({ fill: color, ...ink });
 
 const DOME = (y: number, top = -136, w = 132) =>
   `M ${-w} ${y} C ${-w - 4} ${top + 24} -72 ${top} 0 ${top} C 72 ${top} ${w + 4} ${top + 24} ${w} ${y} Z`;
+
+/*
+ * The show's knit beanie, measured from a reference still: the crown is barely taller than the
+ * head, the band is about a fifth of the head tall, arches up in the middle and sits right on
+ * the eyes, and the pom-pom overlaps the top of the crown.
+ */
+const KNIT_CROWN = 'M -130 -34 C -134 -82 -78 -120 0 -120 C 78 -120 134 -82 130 -34 Z';
+const KNIT_BAND = 'M -134 -41 Q 0 -67 134 -41 Q 140 -29 134 -17 Q 0 -43 -134 -17 Q -140 -29 -134 -41 Z';
+
+function pomPom(color: string, cy = -124) {
+  return (
+    <g>
+      <ellipse cx={0} cy={cy} rx={25} ry={21} {...f(color)} />
+      <g stroke={shade(color, -0.3)} strokeWidth={2.2} strokeLinecap="round">
+        {[-60, -25, 0, 25, 60, 150, 200, 340].map((a) => {
+          const r = (a * Math.PI) / 180;
+          return <line key={a} x1={Math.cos(r) * 6} y1={cy + Math.sin(r) * 5} x2={Math.cos(r) * 20} y2={cy + Math.sin(r) * 16} />;
+        })}
+      </g>
+    </g>
+  );
+}
 
 export const HATS: HatDef[] = [
   { id: 'none', name: 'No Hat', quip: 'Brain fully exposed to the elements. Bold.' },
@@ -26,12 +50,12 @@ export const HATS: HatDef[] = [
     name: 'Pom-Pom Beanie',
     quip: 'The classic. Keeps the brain from freezing. Mostly.',
     defaultColor: '#3b6fd8',
-    clipHairAbove: -36,
+    clipHairAbove: -30,
     front: (c) => (
       <g>
-        <path d={DOME(-34)} {...f(c.color)} />
-        <path d="M -138 -56 Q 0 -70 138 -56 Q 146 -42 138 -28 Q 0 -42 -138 -28 Q -146 -42 -138 -56 Z" {...f(accent(c.color))} />
-        <circle cx={0} cy={-142} r={18} {...f(accent(c.color))} />
+        <path d={KNIT_CROWN} {...f(c.color)} />
+        <path d={KNIT_BAND} {...f(accent(c.color))} />
+        {pomPom(accent(c.color))}
       </g>
     ),
   },
@@ -40,17 +64,17 @@ export const HATS: HatDef[] = [
     name: 'Trapper Toque',
     quip: 'For when your ears have frostbite feelings. Pom-pom included at no extra charge.',
     defaultColor: '#2ec4c4',
-    clipHairAbove: -40,
+    clipHairAbove: -30,
     front: (c) => (
       <g>
         <Mirror>
-          <path d="M -136 -44 L -138 34 Q -122 54 -104 34 L -104 -44 Z" {...f(c.color)} />
+          <path d="M -136 -30 L -138 34 Q -122 54 -104 34 L -104 -30 Z" {...f(c.color)} />
           <path d="M -121 44 L -124 78" fill="none" stroke={accent(c.color)} strokeWidth={4} />
           <circle cx={-124} cy={82} r={6} {...f(accent(c.color))} strokeWidth={2} />
         </Mirror>
-        <path d={DOME(-40)} {...f(c.color)} />
-        <path d="M -136 -62 Q 0 -76 136 -62 Q 142 -50 136 -38 Q 0 -52 -136 -38 Q -142 -50 -136 -62 Z" {...f(accent(c.color))} />
-        <circle cx={0} cy={-140} r={16} {...f(accent(c.color))} />
+        <path d={KNIT_CROWN} {...f(c.color)} />
+        <path d={KNIT_BAND} {...f(accent(c.color))} />
+        {pomPom(accent(c.color))}
       </g>
     ),
   },
@@ -181,11 +205,11 @@ export const HATS: HatDef[] = [
     name: 'Beret',
     quip: 'Oui oui. Paints sad clowns. Sells zero sad clowns.',
     defaultColor: '#d33b2c',
-    clipHairAbove: -80,
+    // A beret sits on top of the hair (no clipping), wide and tilted, so hair stays rounded around it.
     front: (c) => (
       <g>
-        <ellipse cx={22} cy={-102} rx={124} ry={38} transform="rotate(-9 22 -102)" {...f(c.color)} />
-        <path d="M 30 -140 L 34 -156" stroke={O} strokeWidth={7} strokeLinecap="round" />
+        <ellipse cx={14} cy={-104} rx={150} ry={44} transform="rotate(-8 14 -104)" {...f(c.color)} />
+        <path d="M 22 -146 L 26 -162" stroke={O} strokeWidth={7} strokeLinecap="round" />
       </g>
     ),
   },
@@ -386,18 +410,20 @@ export const HATS: HatDef[] = [
     defaultColor: '#f0742a',
     hidesHair: true,
     muffles: true,
+    eyesOver: true,
     front: (c) => (
       <g>
+        {/* Measured from the show: a round hood wider than it is tall, an upright face opening ringed by
+            a wide brown fur rim, and the cinch strings hanging below. */}
         <path
-          d="M -150 60 C -162 -122 -80 -158 0 -158 C 80 -158 162 -122 150 60 C 150 112 90 142 0 142 C -90 142 -150 112 -150 60 Z M 66 4 A 66 52 0 1 0 -66 4 A 66 52 0 1 0 66 4 Z"
+          d="M -164 40 C -168 -96 -92 -136 0 -136 C 92 -136 168 -96 164 40 C 162 96 100 122 0 122 C -100 122 -162 96 -164 40 Z M 50 4 A 50 66 0 1 0 -50 4 A 50 66 0 1 0 50 4 Z"
           fill={c.color}
           fillRule="evenodd"
           {...ink}
         />
-        <ellipse cx={0} cy={4} rx={70} ry={56} fill="none" stroke="#6b4226" strokeWidth={12} />
-        <ellipse cx={0} cy={4} rx={76} ry={62} fill="none" stroke={O} strokeWidth={2} />
-        <ellipse cx={0} cy={4} rx={64} ry={50} fill="none" stroke={O} strokeWidth={2} />
-        <path d="M -20 58 Q -24 90 -30 100 M 20 58 Q 24 90 30 100" fill="none" stroke={O} strokeWidth={3} />
+        <ellipse cx={0} cy={4} rx={62} ry={78} fill="none" stroke="#6b4226" strokeWidth={22} />
+        <ellipse cx={0} cy={4} rx={74} ry={90} fill="none" stroke={shade(c.color, -0.18)} strokeWidth={4} />
+        <path d="M -9 78 Q -12 100 -16 112 M 9 78 Q 12 100 16 112" fill="none" stroke="#4a2c17" strokeWidth={4} strokeLinecap="round" />
       </g>
     ),
   },
@@ -566,7 +592,7 @@ export const HATS: HatDef[] = [
         <path d="M -60 -136 L 60 -136 L 50 -168 L -50 -168 Z" fill="#fff" />
         <path d="M -40 -196 L 40 -196 L 34 -214 L -34 -214 Z" fill="#fff" />
         <path d="M -104 -84 L 104 -84 L 104 -64 L -104 -64 Z" {...f('#f0742a')} />
-        <path d="M -78 -84 L -26 -236 L 26 -236 L 78 -84 Z" fill="none" {...ink} />
+        <path d="M -78 -84 L -26 -236 L 26 -236 L 78 -84 Z" {...edge} />
       </g>
     ),
   },
