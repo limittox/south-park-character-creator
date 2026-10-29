@@ -4,6 +4,8 @@ A South Park-style character creator. Build a construction-paper version of your
 
 Everything runs in the browser. There's no server and no account, and uploaded photos never leave your device.
 
+**Play it:** https://limittox.github.io/south-park-character-creator/
+
 ## The look
 
 The art follows the show's construction-paper style. Proportions were measured pixel by pixel from reference stills, then checked side by side against 20 of the show's characters and every scene that has a counterpart in the show. Nothing is traced or copied from the show's artwork:
@@ -54,7 +56,7 @@ npm test           # unit tests (Vitest)
 npm run build      # static site in dist/
 ```
 
-The `dist/` folder is plain static files and can be hosted anywhere (GitHub Pages, Netlify, an S3 bucket, a USB stick...).
+The `dist/` folder is plain static files and can be hosted anywhere (GitHub Pages, Netlify, an S3 bucket, a USB stick...). Every push to `main` runs the tests, builds the site and publishes it to GitHub Pages (`.github/workflows/deploy.yml`).
 
 ## How it's built
 
