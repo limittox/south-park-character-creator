@@ -29,8 +29,9 @@ The art follows the show's construction-paper style. Proportions were measured p
 - Your character autosaves.
 
 **Photo → Me**
-- Upload a selfie (or use the webcam). The app finds your face, then reads your skin tone, hair colour, hair length, facial hair, glasses, smile and shirt colour, and builds a matching character.
-- Drag and resize the face oval and every guess updates live. You can also override any trait by hand.
+- Upload a selfie (or use the webcam). An on-device face scanner places 478 landmarks on your face and labels every pixel as hair, skin, clothes or accessories. From that it picks your hairstyle (from length, volume, fringe and shape), hair colour, skin tone, beard or moustache, glasses, expression, hat and shirt colour, and builds a matching character.
+- Each guess says why it was made ("past the shoulders", "chin and lip only"), offers the exact measured colour next to the paper palette, and can be changed from the full catalog.
+- **Show what the scanner sees** paints the detected hair, skin, clothes and landmarks over your photo. With several people in the shot, pick a face or drag the oval onto one.
 - **Cursed mode** pastes your actual face onto the paper head, with an optional cut-out filter. The jaw drops when you talk.
 
 **Photo Booth**
@@ -64,7 +65,9 @@ The `dist/` folder is plain static files and can be hosted anywhere (GitHub Page
 - Every character is layered SVG. Head parts are drawn in a normalized head space and body parts are generated from per-body-type geometry, so every item fits every body type.
 - The flat show style is one CSS rule (`src/character/flat.ts`) that strips the ink outline from every filled shape inside a character or scene, on screen and in exports.
 - Exports serialize the SVG with the display font inlined, rasterize it on a canvas, and save it as JPEG or PNG.
-- Photo analysis runs in plain TypeScript: a YCbCr skin mask finds the face, a second colour-keyed pass trims hair out of it, and region sampling with CIE-Lab colour matching reads the traits. Chrome's built-in `FaceDetector` is used when it's available.
+- The photo scanner (`src/lib/faceScan.ts`) uses Google's [MediaPipe](https://ai.google.dev/edge/mediapipe) face landmarker and multiclass selfie segmenter, running in WebAssembly on the device. The models (about 20 MB) are downloaded once from Google's model storage and kept in the browser's cache; photos never leave the device.
+- `src/lib/faceTraits.ts` turns landmarks and pixel labels into traits in a head-tilt-free face coordinate system. Hairstyles come from the hair mask's shape; beards, which the segmenter calls "face", are found by their grain against the smooth cheeks; glasses by the frame across the nose bridge; skin tone by the Individual Typology Angle; colours are corrected for the light using the whites of the eyes. The thresholds were tuned on public-domain studio portraits.
+- If the scanner can't load (offline), the converter falls back to a plain colour guess: a YCbCr skin mask finds the face and CIE-Lab colour matching reads the traits.
 
 | Path | What's there |
 | --- | --- |

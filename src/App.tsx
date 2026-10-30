@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import type { CharacterState } from './types';
 import { CreatorView } from './components/CreatorView';
 import { PhotoBooth } from './components/PhotoBooth';
 import { CrewView } from './components/CrewView';
-import { PhotoConverter } from './components/PhotoConverter';
 import { CharacterCard } from './components/CharacterCard';
 import { ShareModal } from './components/ShareModal';
 import { Intro } from './components/Intro';
@@ -17,6 +16,9 @@ import { isMuted, setMuted, sfx } from './lib/sound';
 import { news, toast } from './lib/toast';
 import { pick } from './lib/random';
 import { SAVE_QUIPS } from './data/humor';
+
+// The photo scanner is the heaviest part of the app; it loads when someone opens it.
+const PhotoConverter = lazy(() => import('./components/PhotoConverter').then((m) => ({ default: m.PhotoConverter })));
 
 type View = 'create' | 'booth' | 'crew';
 
@@ -165,17 +167,19 @@ export default function App() {
       )}
 
       {modal === 'photo' && (
-        <PhotoConverter
-          base={c}
-          onClose={() => setModal(null)}
-          onApply={(next) => {
-            h.set(next);
-            setModal(null);
-            setView('create');
-            toast("You've been paper-ified! Tweak anything you like.", 'good');
-            news(`SHOCKING: Local resident turned into construction paper. "Honestly an improvement," says mom.`);
-          }}
-        />
+        <Suspense fallback={null}>
+          <PhotoConverter
+            base={c}
+            onClose={() => setModal(null)}
+            onApply={(next) => {
+              h.set(next);
+              setModal(null);
+              setView('create');
+              toast("You've been paper-ified! Tweak anything you like.", 'good');
+              news(`SHOCKING: Local resident turned into construction paper. "Honestly an improvement," says mom.`);
+            }}
+          />
+        </Suspense>
       )}
       {modal === 'card' && <CharacterCard c={c} onClose={() => setModal(null)} />}
       {modal === 'share' && <ShareModal c={c} onClose={() => setModal(null)} />}

@@ -17,16 +17,19 @@ export interface Box {
   h: number;
 }
 
-export type HairLength = 'bald' | 'short' | 'medium' | 'long';
-export type FacialHairGuess = 'none' | 'mustache' | 'beard';
-
+/** What the photo scanner found, as catalog ids and colours ready to put on a character. */
 export interface Traits {
   skin: string;
   hairColor: string;
-  hairLength: HairLength;
-  facialHair: FacialHairGuess;
-  glasses: boolean;
-  smile: boolean;
+  hair: string;
+  facialHair: string;
+  glasses: string;
+  mouth: string;
+  eyes: string;
+  /** null keeps the character's own brows. */
+  brows: string | null;
+  hat: string;
+  hatColor: string | null;
   shirt: string | null;
 }
 
@@ -216,7 +219,7 @@ export function analyzeFace(img: Img, b: Box): Traits {
   const hasHair = hairZone.length > 0 && hairPixels.length / hairZone.length > 0.22;
   const hairRgb: RGB = median(hairPixels) ?? median(hairZone) ?? [61, 35, 20];
 
-  let hairLength: HairLength = 'short';
+  let hairLength: 'bald' | 'short' | 'medium' | 'long' = 'short';
   if (!hasHair) hairLength = 'bald';
   else {
     const nearHair = (p: RGB) => deltaE(p, hairRgb) < 18;
@@ -233,7 +236,7 @@ export function analyzeFace(img: Img, b: Box): Traits {
   const darkNonSkin = (p: RGB) => !nearSkin(p) && lum(p) < skinL * 0.72 && (deltaE(p, hairRgb) < 26 || lum(p) < 0.3);
   const chin = fraction(R(0.3, 0.84, 0.7, 1.0), darkNonSkin);
   const lip = fraction(R(0.38, 0.66, 0.62, 0.74), darkNonSkin);
-  const facialHair: FacialHairGuess = chin > 0.55 ? 'beard' : lip > 0.55 ? 'mustache' : 'none';
+  const facialHair = chin > 0.55 ? 'beard' : lip > 0.55 ? 'mustache' : 'none';
 
   // Glasses: the bridge of the nose normally shows skin.
   const bridge = R(0.44, 0.36, 0.56, 0.44);
@@ -250,10 +253,14 @@ export function analyzeFace(img: Img, b: Box): Traits {
   return {
     skin: nearest(skin, SKIN_TONES.slice(0, 10).map((s) => s.color)),
     hairColor: nearest(hairRgb, HAIR_COLORS.slice(0, 10).map((s) => s.color)),
-    hairLength,
+    hair: { bald: 'bald', short: 'messy', medium: 'bob', long: 'long' }[hairLength],
     facialHair,
-    glasses,
-    smile,
+    glasses: glasses ? 'round' : 'none',
+    mouth: smile ? 'grin' : 'smile',
+    eyes: 'classic',
+    brows: null,
+    hat: 'none',
+    hatColor: null,
     shirt: shirtMed ? nearest(shirtMed, CLOTH_COLORS) : null,
   };
 }
@@ -264,24 +271,22 @@ export function rawHex(rgb: RGB): string {
 
 /** Apply detected traits to a character. */
 export function traitsToCharacter(base: CharacterState, t: Traits, photoFace: string | null, usePhotoFace: boolean): CharacterState {
-  const hairByLength: Record<HairLength, string> = {
-    bald: 'bald',
-    short: ['messy', 'sidepart', 'spiky', 'buzz', 'curly', 'flattop', 'pixie'].includes(base.hair) ? base.hair : 'messy',
-    medium: 'bob',
-    long: ['long', 'wavy', 'braids', 'ponytail', 'pigtails'].includes(base.hair) ? base.hair : 'long',
-  };
-  const facialHair = t.facialHair === 'beard' ? 'beard' : t.facialHair === 'mustache' ? 'mustache' : 'none';
-  const grownUp = facialHair !== 'none' && ['kid', 'husky', 'skinny'].includes(base.body);
+  // Real facial hair (not stubble) makes a grown-up.
+  const grownUp = !['none', 'stubble'].includes(t.facialHair) && ['kid', 'husky', 'skinny'].includes(base.body);
   return {
     ...base,
     skin: t.skin,
     hairColor: t.hairColor,
-    hair: hairByLength[t.hairLength],
-    facialHair,
-    glasses: t.glasses ? (base.glasses !== 'none' ? base.glasses : 'round') : 'none',
-    mouth: t.smile ? 'grin' : 'smile',
+    hair: t.hair,
+    facialHair: t.facialHair,
+    glasses: t.glasses,
+    mouth: t.mouth,
+    eyes: t.eyes,
+    brows: t.brows ?? base.brows,
     topColor: t.shirt ?? base.topColor,
-    hat: 'none',
+    hat: t.hat,
+    hatColor: t.hatColor ?? base.hatColor,
+    faceGear: 'none',
     body: grownUp ? (base.body === 'husky' ? 'dadbod' : 'adult') : base.body,
     nose: grownUp ? 'adult' : base.nose,
     photoFace,
@@ -289,15 +294,22 @@ export function traitsToCharacter(base: CharacterState, t: Traits, photoFace: st
   };
 }
 
-/** Crop the face oval to a small image; optional posterize for that cut-out look. */
-export function cropFace(source: HTMLCanvasElement, b: Box, posterize: boolean): string {
+/** Crop the face oval to a small image, levelling a tilted head; optional posterize for that cut-out look. */
+export function cropFace(source: HTMLCanvasElement, b: Box, posterize: boolean, roll = 0): string {
   const out = document.createElement('canvas');
   out.width = 240;
   out.height = 268;
   const ctx = out.getContext('2d')!;
   const mx = b.w * 0.04;
   const my = b.h * 0.03;
-  ctx.drawImage(source, b.x - mx, b.y - my, b.w + mx * 2, b.h + my * 2, 0, 0, out.width, out.height);
+  const sx = out.width / (b.w + mx * 2);
+  const sy = out.height / (b.h + my * 2);
+  ctx.save();
+  ctx.translate(out.width / 2, out.height / 2);
+  ctx.scale(sx, sy);
+  ctx.rotate(-roll);
+  ctx.drawImage(source, -(b.x + b.w / 2), -(b.y + b.h / 2));
+  ctx.restore();
   if (posterize) {
     const d = ctx.getImageData(0, 0, out.width, out.height);
     const levels = 6;
