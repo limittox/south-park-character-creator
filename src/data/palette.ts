@@ -57,6 +57,7 @@ export const CLOTH_COLORS: string[] = [
   '#e86fb0', // pink
   '#7a4a2a', // brown
   '#c9a77a', // khaki
+  '#6e6b3f', // olive
   '#ffffff', // white
   '#b8b8b8', // gray
   '#55555a', // charcoal

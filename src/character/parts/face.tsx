@@ -699,6 +699,9 @@ export interface FacialHairDef extends ItemBase {
 const BEARD_FULL =
   'M -124 6 C -124 70 -74 128 0 132 C 74 128 124 70 124 6 C 112 30 96 40 76 40 C 56 56 30 48 0 48 C -30 48 -56 56 -76 40 C -96 40 -112 30 -124 6 Z';
 
+const BEARD_SHORT =
+  'M -128 -4 C -126 74 -74 115 0 116 C 74 115 126 74 128 -4 L 122 -4 C 120 34 86 56 48 58 C 30 54 14 52 0 52 C -14 52 -30 54 -48 58 C -86 56 -120 34 -122 -4 Z';
+
 export const FACIAL_HAIR: FacialHairDef[] = [
   { id: 'none', name: 'Clean Shaven', quip: 'Smooth as a freshly zambonied ice rink.' },
   {
@@ -743,6 +746,14 @@ export const FACIAL_HAIR: FacialHairDef[] = [
     quip: 'Lumberjack energy. Allergic to wood.',
     under: (c) => <path d={BEARD_FULL} fill={c.color} {...ink} />,
     over: (c) => <path d="M -28 54 Q -14 44 0 50 Q 14 44 28 54 Q 14 52 0 56 Q -14 52 -28 54 Z" fill={c.color} {...ink} strokeWidth={2} />,
+  },
+  {
+    id: 'shortbeard',
+    name: 'Short Beard',
+    quip: 'Trims it every Sunday with a ruler and a deep sense of purpose.',
+    // Hugs the jaw: starts below the cheekbones, leaves the cheeks clear and barely passes the chin.
+    under: (c) => <path d={BEARD_SHORT} fill={c.color} {...ink} />,
+    over: (c) => <path d="M -27 54 Q -14 45 0 50 Q 14 45 27 54 Q 14 52 0 55 Q -14 52 -27 54 Z" fill={c.color} {...ink} strokeWidth={2} />,
   },
   {
     id: 'goatee',

@@ -24,6 +24,9 @@ import {
   readFace,
   SEG,
   skinSwatch,
+  FRAME,
+  frameSwatch,
+  type FacialHairZones,
   type HairMetrics,
   type Pt,
 } from './lib/faceTraits';
@@ -288,8 +291,11 @@ const hairM = (o: Partial<HairMetrics>): HairMetrics => ({
   strands: false,
   thickness: 0.2,
   hat: 0,
+  direction: 0.7,
   ...o,
 });
+
+const zones = (lip: number, chin: number, jaw: number, lipLight: number, below = 1, belowFace = 0): FacialHairZones => ({ lip, chin, jaw, lipLight, below, belowFace });
 
 describe('face scanner rules', () => {
   it('names hairstyles from the hair shape', () => {
@@ -305,18 +311,29 @@ describe('face scanner rules', () => {
     expect(classifyHair(hairM({ thickness: 0.12, lightness: 80 })).id).toBe('sidepart');
     expect(classifyHair(hairM({ thickness: 0.3 })).id).toBe('messy');
     expect(classifyHair(hairM({ eyeCover: 0.5, bangs: 0.5 })).id).toBe('emo');
+    // Curls point every which way, so the hair has no strong direction.
+    expect(classifyHair(hairM({ thickness: 0.3, direction: 0.4 })).id).toBe('curly');
+    expect(classifyHair(hairM({ length: 0.5, thickness: 0.31, width: 0.8, direction: 0.4 })).id).toBe('curly');
+    // Tight coils cropped short are a buzz cut, not a mop.
+    expect(classifyHair(hairM({ thickness: 0.16, direction: 0.25 })).id).toBe('buzz');
+    // Short sides on a wide head of hair are a fade, not a mohawk.
+    expect(classifyHair(hairM({ strip: 0.8, temples: 0.15, width: 1.1, thickness: 0.3 })).id).not.toBe('mohawk');
+    expect(classifyHair(hairM({ strip: 0.8, temples: 0.05, width: 0.5, thickness: 0.3 })).id).toBe('mohawk');
   });
 
   it('tells beards, moustaches and clean shaves apart by grain', () => {
-    expect(classifyFacialHair({ lip: 6, chin: 5, jaw: 6, lipLight: 0.8 }).id).toBe('beard');
-    expect(classifyFacialHair({ lip: 1.2, chin: 4, jaw: 4, lipLight: 1 }).id).toBe('chinstrap');
-    expect(classifyFacialHair({ lip: 4, chin: 3.5, jaw: 1.3, lipLight: 0.8 }).id).toBe('goatee');
-    expect(classifyFacialHair({ lip: 7, chin: 1.4, jaw: 1.7, lipLight: 0.34 }).id).toBe('mustache');
+    // Trimmed beards stop at the jaw; full ones carry on under the chin.
+    expect(classifyFacialHair(zones(6, 5, 6, 0.8, 1.7, 0.01)).id).toBe('shortbeard');
+    expect(classifyFacialHair(zones(6, 5, 6, 0.8, 8.1, 0.85)).id).toBe('beard');
+    expect(classifyFacialHair(zones(9, 6, 5, 0.35, 3.8, 0.53)).id).toBe('beard');
+    expect(classifyFacialHair(zones(1.2, 4, 4, 1)).id).toBe('chinstrap');
+    expect(classifyFacialHair(zones(4, 3.5, 1.3, 0.8)).id).toBe('goatee');
+    expect(classifyFacialHair(zones(7, 1.4, 1.7, 0.34)).id).toBe('mustache');
     // A white moustache on darker skin is bright rather than grainy.
-    expect(classifyFacialHair({ lip: 1.1, chin: 0.6, jaw: 0.9, lipLight: 1.4 }).id).toBe('mustache');
+    expect(classifyFacialHair(zones(1.1, 0.6, 0.9, 1.4)).id).toBe('mustache');
     // A shadowy upper lip alone is not a moustache.
-    expect(classifyFacialHair({ lip: 2.4, chin: 1.3, jaw: 1.9, lipLight: 0.9 }).id).toBe('none');
-    expect(classifyFacialHair({ lip: 1.4, chin: 1.2, jaw: 1.3, lipLight: 0.95 }).id).toBe('none');
+    expect(classifyFacialHair(zones(2.4, 1.3, 1.9, 0.9)).id).toBe('none');
+    expect(classifyFacialHair(zones(1.4, 1.2, 1.3, 0.95)).id).toBe('none');
   });
 
   it('spots glasses by the frame across the nose', () => {
@@ -324,6 +341,19 @@ describe('face scanner rules', () => {
     expect(classifyGlasses({ rims: 0.9, bridge: 2.8, temples: 2.1, eyeDark: 0.6, accessory: 0.14 }).id).toBe('square');
     expect(classifyGlasses({ rims: 0.9, bridge: 1.8, temples: 1, eyeDark: 0.5, accessory: 0.12 }).id).toBe('round');
     expect(classifyGlasses({ rims: 1, bridge: 2, temples: 1.5, eyeDark: 0.9, accessory: 0.4 }).id).toBe('sunglasses');
+    // Strong edges without any frame pixels are creases and shadows, not glasses.
+    expect(classifyGlasses({ rims: 2.3, bridge: 3.2, temples: 1.6, eyeDark: 0.63, accessory: 0 }).id).toBe('none');
+    expect(classifyGlasses({ rims: 2.6, bridge: 1.4, temples: 1.2, eyeDark: 0.84, accessory: 0 }).id).toBe('none');
+    // Thin metal frames.
+    expect(classifyGlasses({ rims: 1, bridge: 2.8, temples: 2, eyeDark: 0.5, accessory: 0.12 }, FRAME.Gold).id).toBe('round');
+  });
+
+  it('names frame colours', () => {
+    expect(frameSwatch([28, 26, 30])).toBe(FRAME.Black);
+    expect(frameSwatch([196, 160, 82])).toBe(FRAME.Gold);
+    expect(frameSwatch([180, 182, 186])).toBe(FRAME.Silver);
+    expect(frameSwatch([96, 58, 34])).toBe(FRAME.Tortoise);
+    expect(frameSwatch([200, 40, 40])).toBe(FRAME.Red);
   });
 
   it('reads expressions from the landmarker scores', () => {
@@ -343,6 +373,16 @@ describe('face scanner rules', () => {
     expect(idx([198, 150, 120])).toBeGreaterThan(idx([232, 196, 176]));
     expect(idx([150, 100, 70])).toBeGreaterThan(idx([198, 150, 120]));
     expect(idx([88, 58, 44])).toBeGreaterThanOrEqual(7);
+  });
+
+  it('uses visible teeth to steady the skin tone', () => {
+    const idx = (rgb: [number, number, number], teeth = 0) => SKIN_TONES.findIndex((t) => t.color === skinSwatch(rgb, teeth));
+    // A medium-brown face in a bright, cool-tinted selfie reads light on its own...
+    const face: [number, number, number] = [196, 150, 135];
+    // ...but it is a lot darker than the teeth next to it, which pulls the tone darker.
+    expect(idx(face, 92)).toBeGreaterThan(idx(face));
+    // A fair face is nearly as bright as the teeth and stays fair.
+    expect(idx([236, 200, 180], 90)).toBeLessThanOrEqual(2);
   });
 
   it('names hair colours, spotting grey against the skin', () => {
@@ -422,7 +462,8 @@ describe('face scanner read', () => {
     const { seg, pts } = fakeScan({ beard: true, longHair: true });
     const r = readFace(seg, pts, { mouthSmileLeft: 0.7, mouthSmileRight: 0.7 });
     expect(r.traits.hair).toBe('long');
-    expect(r.traits.facialHair).toBe('beard');
+    // The speckle stops at the chin, so this is a trimmed beard.
+    expect(r.traits.facialHair).toBe('shortbeard');
     expect(r.traits.glasses).toBe('none');
     expect(r.traits.shirt).toBe('#2e8b47');
     expect(r.traits.mouth).toBe('smile');
@@ -430,7 +471,7 @@ describe('face scanner read', () => {
     expect(['#3d2314', '#6e4224']).toContain(r.traits.hairColor);
     const c = traitsToCharacter(DEFAULT_CHARACTER, r.traits, null, false);
     expect(c.body).toBe('adult');
-    expect(c.facialHair).toBe('beard');
+    expect(c.facialHair).toBe('shortbeard');
   });
 
   it('reads a short-haired, clean-shaven head', () => {

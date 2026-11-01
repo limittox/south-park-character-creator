@@ -121,10 +121,25 @@ export function skinAngle(c: RGB): number {
   return (Math.atan2(L - 50, Math.max(L < 50 ? 18 : 6, b)) * 180) / Math.PI;
 }
 
-export function skinSwatch(c: RGB): string {
+/**
+ * Skin brightness over teeth brightness (both CIE L*), where each paper tone starts. Teeth are lit
+ * like the face and are nearly the same colour on everyone, so the ratio barely moves with exposure
+ * or a tinted light; calibrated on smiling studio portraits.
+ */
+const TEETH_STEPS = [1.02, 0.86, 0.81, 0.77, 0.72, 0.67, 0.61, 0.55, 0.49];
+
+export function skinSwatch(c: RGB, teethL = 0): string {
   const ita = skinAngle(c);
-  const k = ITA_STEPS.findIndex((t) => ita >= t);
-  return SKIN_TONES[k < 0 ? 9 : k].color;
+  let k = ITA_STEPS.findIndex((t) => ita >= t);
+  if (k < 0) k = 9;
+  if (teethL >= 78) {
+    // Visible teeth: split the difference between the two reads.
+    const r = rgbToLab(c)[0] / teethL;
+    let j = TEETH_STEPS.findIndex((t) => r >= t);
+    if (j < 0) j = 9;
+    k = Math.round((k + j) / 2);
+  }
+  return SKIN_TONES[k].color;
 }
 
 const HAIR = Object.fromEntries(HAIR_COLORS.map((s) => [s.name, s.color]));
@@ -244,6 +259,11 @@ export interface HairMetrics {
   thickness: number;
   /** Something that isn't hair or skin sitting on top of the head. */
   hat: number;
+  /**
+   * How strongly the hair runs one way (0..1). Straight or combed hair scores 0.6 and up; curls
+   * and coils point every which way and score under 0.5.
+   */
+  direction: number;
 }
 
 export type HairLengthName = 'bald' | 'short' | 'medium' | 'long';
@@ -272,15 +292,18 @@ export function classifyHair(m: HairMetrics): { id: string; why: string } {
     return { id: 'long', why: 'past the shoulders' };
   }
   if (m.eyeCover > 0.3) return { id: 'emo', why: 'fringe over one eye' };
+  const curls = m.direction < 0.5;
   if (len === 'medium') {
-    if (big && m.width >= 1.15) return { id: 'curly', why: 'chin length and full' };
+    if ((big && m.width >= 1.15) || curls) return { id: 'curly', why: curls ? 'chin length and curly' : 'chin length and full' };
     return { id: 'bob', why: 'down to the chin' };
   }
   // Short hair.
-  if (m.hat < 0.4 && m.strip > 0.5 && m.temples < 0.2 && m.thickness > 0.12) return { id: 'mohawk', why: 'a strip down the middle' };
+  // A real mohawk is a narrow strip; short sides on a wide head of hair are just a fade.
+  if (m.hat < 0.4 && m.strip > 0.6 && m.temples < 0.15 && m.width < 0.6 && m.thickness > 0.12) return { id: 'mohawk', why: 'a strip down the middle' };
   if (m.bangs > 0.6 && Math.abs(m.bangsLeft - m.bangsRight) < 0.25) return { id: 'bowl', why: 'a straight fringe all the way across' };
   if (m.thickness >= 0.42) return m.bangs < 0.35 ? { id: 'curly', why: 'short with lots of volume' } : { id: 'messy', why: 'short and full, fringe down' };
-  if (m.thickness < (m.lightness > 40 ? 0.09 : 0.15)) return { id: 'buzz', why: 'cropped close' };
+  if (curls && m.thickness >= 0.24) return { id: 'curly', why: 'short and curly' };
+  if (m.thickness < (m.lightness > 40 ? 0.09 : 0.15) || (m.direction < 0.36 && m.thickness < 0.24)) return { id: 'buzz', why: 'cropped close' };
   if (m.thickness < 0.26) return { id: 'sidepart', why: 'short and neat' };
   return { id: 'messy', why: 'short with some volume' };
 }
@@ -292,8 +315,11 @@ export interface FacialHairZones {
   lip: number;
   chin: number;
   jaw: number;
-  /** Brightness of the upper lip next to the cheeks (a dark moustache is well under 1). */
+  /** Brightness of the upper lip next to the cheeks (a dark moustache is well under 1, a white one over). */
   lipLight: number;
+  /** Grain just below the chin, and how much of it the segmenter calls face: a long beard hangs there. */
+  below: number;
+  belowFace: number;
 }
 
 /** Grain above this (relative to the cheeks) means whiskers. Clean-shaven faces stay under ~1.9. */
@@ -304,7 +330,11 @@ export function classifyFacialHair(z: FacialHairZones): { id: string; why: strin
   const lip = z.lip > WHISKERS || lipColour;
   const chin = z.chin > WHISKERS;
   const jaw = z.jaw > WHISKERS;
-  if (jaw && chin) return lip ? { id: 'beard', why: 'jaw, chin and lip' } : { id: 'chinstrap', why: 'along the jaw, no moustache' };
+  if (jaw && chin) {
+    if (!lip) return { id: 'chinstrap', why: 'along the jaw, no moustache' };
+    // Short, trimmed beards stop at the jaw; full ones carry on under the chin.
+    return z.belowFace > 0.5 || z.below > 6.5 ? { id: 'beard', why: 'full, past the chin' } : { id: 'shortbeard', why: 'short and trimmed' };
+  }
   if (chin && lip) return { id: 'goatee', why: 'chin and lip only' };
   // A dimple or shadow under the lip can look grainy, so a patch on its own has to be clear.
   if (z.chin > WHISKERS * 1.25) return { id: 'soulpatch', why: 'a patch on the chin' };
@@ -325,12 +355,31 @@ export interface GlassesClues {
   accessory: number;
 }
 
-export function classifyGlasses(g: GlassesClues): { id: string; why: string } {
+export function classifyGlasses(g: GlassesClues, frame: string | null = null): { id: string; why: string } {
   // A bare nose bridge is smooth (under 1 on studio portraits); a frame across it scores 2.5 or more.
+  // The segmenter labels real frames as an accessory, which rules out shadowy eyes and creases.
   const score = g.bridge * 0.6 + g.temples * 0.4 + g.accessory * 2;
-  if (g.eyeDark > 0.78 && (g.accessory > 0.3 || score > 1.2)) return { id: 'sunglasses', why: 'dark lenses' };
-  if (score > 1.4) return { id: g.bridge > 2.4 ? 'square' : 'round', why: g.bridge > 2.4 ? 'bold frames' : 'thin frames' };
-  return { id: 'none', why: 'no frames found' };
+  const seen = g.accessory >= 0.03 ? score > 1.4 : score > 3.5;
+  if (g.eyeDark > 0.78 && g.accessory > 0.15) return { id: 'sunglasses', why: 'dark lenses' };
+  if (!seen) return { id: 'none', why: 'no frames found' };
+  if (frame === FRAME.Gold || frame === FRAME.Silver) return { id: 'round', why: frame === FRAME.Gold ? 'thin gold frames' : 'thin metal frames' };
+  return g.bridge > 2.4 ? { id: 'square', why: 'bold frames' } : { id: 'round', why: 'thin frames' };
+}
+
+/** Frame colours glasses come in. */
+export const FRAME = { Black: '#1f1f22', Tortoise: '#6b4226', Gold: '#c9a43a', Silver: '#b9bcc2', Red: '#d33b2c', Blue: '#3b6fd8', Clear: '#e8e4dc' };
+
+/** Names a frame colour measured from the photo. */
+export function frameSwatch(c: RGB): string {
+  const [L, a, b] = rgbToLab(c);
+  const chroma = Math.hypot(a, b);
+  const hue = (Math.atan2(b, a) * 180) / Math.PI;
+  if (L < 30) return chroma > 12 && hue < 80 ? FRAME.Tortoise : FRAME.Black;
+  if (chroma > 30 && hue < 45) return FRAME.Red;
+  if (chroma > 20 && hue > 200 && hue < 300) return FRAME.Blue;
+  if (chroma > 16 && hue > 50 && hue < 105) return L > 45 ? FRAME.Gold : FRAME.Tortoise;
+  if (L > 80 && chroma < 10) return FRAME.Clear;
+  return L > 55 ? FRAME.Silver : FRAME.Black;
 }
 
 /** Maps the landmarker's expression scores (and visible teeth) onto the catalog's faces. */
@@ -381,7 +430,7 @@ export interface Reading {
   /** The colours as measured (after the lighting fix), before matching to the paper palette. */
   measured: { skin: string; hair: string | null; shirt: string | null };
   why: Partial<Record<keyof Traits, string>>;
-  debug: { hair: HairMetrics; facialHair: FacialHairZones; glasses: GlassesClues; teeth: number; lab: Record<string, number[] | null> };
+  debug: { hair: HairMetrics; facialHair: FacialHairZones; glasses: GlassesClues; teeth: number; lab: Record<string, number[] | null>; extra: { teethL: number; frame: string | null } };
 }
 
 const G = 0.05;
@@ -539,6 +588,7 @@ export function readFace(seg: Segment, p: Pt[], blend: Record<string, number>): 
     strands,
     thickness: Math.max(0, hairline - hairTop),
     hat: hatShare,
+    direction: 1,
   };
 
   // Colours, corrected for the light using the whites of the eyes.
@@ -579,8 +629,10 @@ export function readFace(seg: Segment, p: Pt[], blend: Record<string, number>): 
   // skin, a beard or moustache is full of fine light/dark speckle. Medians keep glasses frames
   // and stray hairs from skewing a zone.
   const rf = Math.max(1, Math.round(f.w * 0.008));
-  const zone = () => ({ grain: [] as number[], sum: 0, n: 0, other: 0 });
-  const Z = { lip: zone(), chin: zone(), jaw: zone(), cheek: zone(), eyes: zone() };
+  const zone = () => ({ grain: [] as number[], sum: 0, n: 0, other: 0, face: 0 });
+  const Z = { lip: zone(), chin: zone(), jaw: zone(), cheek: zone(), eyes: zone(), below: zone(), cheekHi: zone() };
+  const mouthPx: { l: number; s: number }[] = [];
+  const framePx: RGB[] = [];
   const rows = { rimL: new Map<number, [number, number]>(), rimR: new Map<number, [number, number]>(), bridge: new Map<number, [number, number]>(), temple: new Map<number, [number, number]>(), cheek: new Map<number, [number, number]>() };
   const addRow = (m: Map<number, [number, number]>, y: number, g: number) => {
     const e = m.get(y) ?? [0, 0];
@@ -607,6 +659,7 @@ export function readFace(seg: Segment, p: Pt[], blend: Record<string, number>): 
         z.n++;
         z.sum += L;
         if (lab === SEG.other) z.other++;
+        if (lab === SEG.faceSkin) z.face++;
         z.grain.push(Math.abs(L - box(x, y, rf)) / (L + 0.08));
       };
       if (au < 0.17 && v > noseFy + 0.012 && v < lipTopFy - 0.004) put(Z.lip);
@@ -616,6 +669,10 @@ export function readFace(seg: Segment, p: Pt[], blend: Record<string, number>): 
       }
       if (au > 0.22 && au < 0.4 && v > mouthFy && v < chinFy - 0.06) put(Z.jaw);
       if (au > 0.14 && au < 0.32 && v > eyeBottom + 0.06 && v < noseFy) put(Z.cheek);
+      if (au < 0.2 && v > chinFy + 0.02 && v < chinFy + 0.14) put(Z.below);
+      if (au > 0.3 && au < 0.42 && v > noseFy - 0.04 && v < mouthFy - 0.02) put(Z.cheekHi);
+      if (lab === SEG.other && v > eyeTop - 0.06 && v < eyeBottom + 0.08 && u > eyeSpan[0] - 0.05 && u < eyeSpan[3] + 0.05 && !(x % 2) && !inPoly(eyePolys[0], x, y) && !inPoly(eyePolys[1], x, y))
+        framePx.push([data[i * 4], data[i * 4 + 1], data[i * 4 + 2]]);
       // Edge strength across rows (glasses frames are mostly horizontal lines in front of the face),
       // against the lower cheeks, which frames never reach.
       const gy = Math.abs(lum[i + W] - lum[i - W]) + Math.abs(lum[i + 1] - lum[i - 1]) * 0.5;
@@ -635,6 +692,7 @@ export function readFace(seg: Segment, p: Pt[], blend: Record<string, number>): 
         const b = data[i * 4 + 2];
         const mx = Math.max(r, g, b);
         if (L > Math.max(0.45, refL * 0.85) && mx > 0 && (mx - Math.min(r, g, b)) / mx < 0.3) teethN++;
+        mouthPx.push({ l: L, s: mx ? (mx - Math.min(r, g, b)) / mx : 0 });
       }
     }
   }
@@ -642,7 +700,14 @@ export function readFace(seg: Segment, p: Pt[], blend: Record<string, number>): 
   const cheekL = Z.cheek.n ? mean(Z.cheek) : refL;
   const cheekGrain = Math.max(0.004, median(Z.cheek.grain));
   const grain = (z: ReturnType<typeof zone>) => (z.n > 12 ? median(z.grain) / cheekGrain : 1);
-  const fh: FacialHairZones = { lip: grain(Z.lip), chin: grain(Z.chin), jaw: grain(Z.jaw), lipLight: mean(Z.lip) / Math.max(0.02, cheekL) };
+  const fh: FacialHairZones = {
+    lip: grain(Z.lip),
+    chin: grain(Z.chin),
+    jaw: grain(Z.jaw),
+    lipLight: mean(Z.lip) / Math.max(0.02, cheekL),
+    below: grain(Z.below),
+    belowFace: Z.below.n > 12 ? Z.below.face / Z.below.n : 0,
+  };
   const rowMax = (m: Map<number, [number, number]>) => Math.max(0, ...[...m.values()].filter(([, n]) => n >= 3).map(([s, n]) => s / n));
   const base = Math.max(0.01, rowMax(rows.cheek));
   const glassesC: GlassesClues = {
@@ -653,28 +718,69 @@ export function readFace(seg: Segment, p: Pt[], blend: Record<string, number>): 
     accessory: frac(SEG.other, eyeSpan[0] - 0.05, eyeSpan[3] + 0.05, eyeTop - 0.06, eyeBottom + 0.08),
   };
   const teeth = mouthN > 8 ? teethN / mouthN : 0;
+  // Teeth: the brightest, greyest pixels between the lips.
+  const teethPx = mouthPx.filter((q) => q.s < 0.35).sort((a, b) => b.l - a.l);
+  const teethL = teethPx.length > 20 ? teethPx.slice(0, Math.ceil(teethPx.length * 0.3)).reduce((t, q) => t + q.l, 0) / Math.ceil(teethPx.length * 0.3) : 0;
+
+  // Hair texture: straight hair has a strong direction (strands); curls point every which way.
+  const bs = Math.max(4, Math.round(f.w * 0.05));
+  const blocks = new Map<number, number[]>();
+  for (let y = 3; y < H - 3; y++) {
+    for (let x = 3; x < W - 3; x++) {
+      const i = y * W + x;
+      if (faceY[i] > eyeMid || !isHair(i) || !isHair(i - 3) || !isHair(i + 3) || !isHair(i - 3 * W) || !isHair(i + 3 * W)) continue;
+      const gx = lum[i - W + 1] + 2 * lum[i + 1] + lum[i + W + 1] - lum[i - W - 1] - 2 * lum[i - 1] - lum[i + W - 1];
+      const gy = lum[i + W - 1] + 2 * lum[i + W] + lum[i + W + 1] - lum[i - W - 1] - 2 * lum[i - W] - lum[i - W + 1];
+      const key = Math.floor(y / bs) * 10000 + Math.floor(x / bs);
+      const b = blocks.get(key) ?? [0, 0, 0, 0];
+      b[0] += gx * gx;
+      b[1] += gy * gy;
+      b[2] += gx * gy;
+      b[3]++;
+      blocks.set(key, b);
+    }
+  }
+  // Per block, how much the gradients agree on one direction (the structure tensor's coherence).
+  const cohs: number[] = [];
+  for (const [jxx, jyy, jxy, n] of blocks.values()) {
+    const e = jxx + jyy;
+    if (n < bs * bs * 0.6 || e / n < 0.002) continue;
+    cohs.push(Math.sqrt((jxx - jyy) ** 2 + 4 * jxy * jxy) / e);
+  }
+  hairM.direction = cohs.length >= 4 ? median(cohs) : 1;
+
+  // Glasses frames: the accessory pixels round the eyes least like the skin under them.
+  const skinLab0 = rgbToLab(skinRaw ?? skinRgb);
+  const frameNear = framePx
+    .map((c) => ({ c, d: labDist(rgbToLab(c), skinLab0) }))
+    .sort((a, b) => b.d - a.d)
+    .slice(0, Math.ceil(framePx.length * 0.4))
+    .map((q) => q.c);
+  const frameRgb = framePx.length > 10 ? trimmedMean(frameNear, 0.1, 0.9) : null;
+  const frame = frameRgb ? frameSwatch(fix(frameRgb)) : null;
+  const teethLstar = teeth > 0.08 && teethL ? rgbToLab([teethL * 255, teethL * 255, teethL * 255])[0] : 0;
 
   const hairPick = classifyHair(hairM);
   const fhPick = classifyFacialHair(fh);
   // No hair on the head to measure: take the colour from the beard (it colours the whiskers anyway).
   // Whiskers are the chin pixels least like the skin around them.
-  const skinLab = rgbToLab(skinRaw ?? skinRgb);
   const whiskers = chinPx
-    .map((c) => ({ c, d: labDist(rgbToLab(c), skinLab) }))
+    .map((c) => ({ c, d: labDist(rgbToLab(c), skinLab0) }))
     .sort((a, b) => b.d - a.d)
     .slice(0, Math.ceil(chinPx.length * 0.4))
     .map((q) => q.c);
   const beardRaw = !hairRgb && !['none', 'stubble'].includes(fhPick.id) ? trimmedMean(whiskers, 0.1, 0.9) : null;
   const shownHair = hairRgb ?? (beardRaw ? fix(beardRaw) : null);
-  const glassesPick = classifyGlasses(glassesC);
+  const glassesPick = classifyGlasses(glassesC, frame);
   const face = expressionFrom(blend, teeth);
   const wearsHat = hairM.hat > 0.45 && !!hatRgb;
   const traits: Traits = {
-    skin: skinSwatch(skinRgb),
+    skin: skinSwatch(skinRgb, teethLstar),
     hairColor: shownHair ? hairSwatch(shownHair, skinRgb) : HAIR_COLORS[1].color,
     hair: hairPick.id,
     facialHair: fhPick.id,
     glasses: glassesPick.id,
+    glassesColor: glassesPick.id !== 'none' && frame ? frame : null,
     mouth: face.mouth,
     eyes: face.eyes,
     brows: face.brows,
@@ -698,6 +804,7 @@ export function readFace(seg: Segment, p: Pt[], blend: Record<string, number>): 
       glasses: glassesC,
       teeth,
       lab: { skin: skinRaw && rgbToLab(skinRaw), sclera: scleraRaw && rgbToLab(scleraRaw), hair: hairRaw && rgbToLab(hairRaw) },
+      extra: { teethL: teethLstar, frame },
     },
   };
 }

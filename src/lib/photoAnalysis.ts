@@ -24,6 +24,8 @@ export interface Traits {
   hair: string;
   facialHair: string;
   glasses: string;
+  /** Frame colour, when the scanner could see it. */
+  glassesColor: string | null;
   mouth: string;
   eyes: string;
   /** null keeps the character's own brows. */
@@ -256,6 +258,7 @@ export function analyzeFace(img: Img, b: Box): Traits {
     hair: { bald: 'bald', short: 'messy', medium: 'bob', long: 'long' }[hairLength],
     facialHair,
     glasses: glasses ? 'round' : 'none',
+    glassesColor: null,
     mouth: smile ? 'grin' : 'smile',
     eyes: 'classic',
     brows: null,
@@ -280,6 +283,7 @@ export function traitsToCharacter(base: CharacterState, t: Traits, photoFace: st
     hair: t.hair,
     facialHair: t.facialHair,
     glasses: t.glasses,
+    glassesColor: t.glassesColor ?? base.glassesColor,
     mouth: t.mouth,
     eyes: t.eyes,
     brows: t.brows ?? base.brows,
