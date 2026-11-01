@@ -42,6 +42,13 @@ const XRAY: [number, number, number, number][] = [
   [120, 255, 90, 150],
 ];
 
+/** Phones and metered connections wait until a photo is picked before fetching the scanner. */
+function prefetchScanner(): boolean {
+  const conn = (navigator as Navigator & { connection?: { saveData?: boolean; type?: string; effectiveType?: string } }).connection;
+  if (conn?.saveData || conn?.type === 'cellular' || /(^|-)[23]g$/.test(conn?.effectiveType ?? '')) return false;
+  return !matchMedia('(pointer: coarse)').matches;
+}
+
 const center = (b: Box) => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
 
 /** The scanned face whose oval sits under the given box, if any. */
@@ -95,13 +102,17 @@ export function PhotoConverter({ base, onApply, onClose }: Props) {
     streamRef.current = null;
   };
   useEffect(() => stopCamera, []);
-  // Start fetching the scanner as soon as the converter opens; it is usually ready by the time a photo is picked.
-  useEffect(() => {
+  const [prefetch] = useState(prefetchScanner);
+  const warmUp = useCallback(() => {
     loadScanner(setProgress).then(
       () => setProgress(null),
       () => setProgress(null),
     );
   }, []);
+  // On a computer, start fetching the scanner as soon as the converter opens so it is ready by the time a photo is picked.
+  useEffect(() => {
+    if (prefetch) warmUp();
+  }, [prefetch, warmUp]);
 
   /** Reads one scanned face: cut out the head, label its pixels, measure everything. */
   const readScanned = useCallback(async (f: ScannedFace) => {
@@ -118,7 +129,9 @@ export function PhotoConverter({ base, onApply, onClose }: Props) {
     async (source: CanvasImageSource, sw: number, sh: number, mirror = false) => {
       const id = ++scanId.current;
       setStep('adjust');
-      await new Promise((r) => requestAnimationFrame(r));
+      // The canvas is always mounted; yield once so the step change renders. (Not requestAnimationFrame:
+      // it never fires in a background tab, e.g. while a phone is still in its photo picker.)
+      await new Promise((r) => setTimeout(r, 0));
       const canvas = canvasRef.current;
       if (!canvas) return;
       const scale = Math.min(1, MAX_DIM / Math.max(sw, sh));
@@ -192,6 +205,7 @@ export function PhotoConverter({ base, onApply, onClose }: Props) {
   const startCamera = async () => {
     setCamError(null);
     setStep('camera');
+    warmUp();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 } }, audio: false });
       streamRef.current = stream;
@@ -372,6 +386,7 @@ export function PhotoConverter({ base, onApply, onClose }: Props) {
             <p style={{ maxWidth: 540, color: '#5d5a52', fontSize: 14 }}>
               Works best looking at the camera in decent light, with your hair and shoulders in the shot. The face scanner runs on your device: your photo never
               leaves it. (We are too lazy to build a server anyway.)
+              {!prefetch && ' Heads-up: the first scan downloads the scanner, about 24 MB, just once.'}
             </p>
           </div>
         </div>
@@ -406,137 +421,146 @@ export function PhotoConverter({ base, onApply, onClose }: Props) {
       )}
 
       <div className="photo-steps" style={{ display: step === 'adjust' ? undefined : 'none' }}>
-        <div>
-          <div className="photo-frame" ref={frameRef} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-            <canvas ref={canvasRef} />
-            <canvas ref={xrayRef} className="xray" />
-            {scanning && (
-              <>
-                <div className="scanning" />
-                <div className="face-oval" style={{ left: '30%', top: '20%', width: '40%', height: '50%', borderStyle: 'dotted' }}>
-                  <span className="tag">{scanLine}</span>
+        <div className="ps-col">
+          <div className="ps-photo">
+            <div className="photo-frame" ref={frameRef} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
+              <canvas ref={canvasRef} />
+              <canvas ref={xrayRef} className="xray" />
+              {scanning && (
+                <>
+                  <div className="scanning" />
+                  <div className="face-oval" style={{ left: '30%', top: '20%', width: '40%', height: '50%', borderStyle: 'dotted' }}>
+                    <span className="tag">{scanLine}</span>
+                  </div>
+                </>
+              )}
+              {!scanning && box && (
+                <div
+                  className="face-oval"
+                  style={{ left: `${(box.x / W) * 100}%`, top: `${(box.y / H) * 100}%`, width: `${(box.w / W) * 100}%`, height: `${(box.h / H) * 100}%` }}
+                  onPointerDown={onPointerDown('move')}
+                >
+                  <span className="tag">{faceIdx >= 0 ? 'Got you' : 'Drag me onto your face'}</span>
+                  <span className="handle" onPointerDown={onPointerDown('resize')} aria-label="Resize" />
                 </div>
-              </>
-            )}
-            {!scanning && box && (
-              <div
-                className="face-oval"
-                style={{ left: `${(box.x / W) * 100}%`, top: `${(box.y / H) * 100}%`, width: `${(box.w / W) * 100}%`, height: `${(box.h / H) * 100}%` }}
-                onPointerDown={onPointerDown('move')}
-              >
-                <span className="tag">{faceIdx >= 0 ? 'Got you' : 'Drag me onto your face'}</span>
-                <span className="handle" onPointerDown={onPointerDown('resize')} aria-label="Resize" />
-              </div>
-            )}
+              )}
+            </div>
+            {scanning && progress !== null && <ScannerProgress f={progress} />}
           </div>
-          {scanning && progress !== null && <ScannerProgress f={progress} />}
-          <p style={{ fontSize: 13, fontWeight: 700, color: '#5d5a52' }}>
-            {engine === 'basic'
-              ? 'The face scanner could not load (offline?), so this is a colour guess. Fit the oval from hairline to chin.'
-              : faces.length > 1
-                ? `Found ${faces.length} faces. Drag the oval onto the one you want, or pick one below.`
-                : 'The oval only sets the crop for cursed mode. Drag it onto another face to scan that one instead.'}
-          </p>
-          <div className="row">
-            <button className="btn small" onClick={() => setStep('pick')}>
-              ← Different photo
-            </button>
-            <button className="btn small" onClick={() => setOver({})} disabled={!Object.keys(over).length}>
-              ↺ Reset my tweaks
-            </button>
-            {engine === 'ai' && faceIdx >= 0 && (
-              <button className="btn small" aria-pressed={xray} onClick={() => setXray((x) => !x)}>
-                🔬 {xray ? 'Hide' : 'Show'} what the scanner sees
-              </button>
-            )}
-            {faces.length > 1 &&
-              faces.map((_, i) => (
-                <button key={i} className="btn small" aria-pressed={faceIdx === i} onClick={() => pickFace(i)}>
-                  Face {i + 1}
-                </button>
-              ))}
-          </div>
-          {xray && faceIdx >= 0 && (
-            <p className="xray-key">
-              <i style={{ background: 'rgb(236,64,196)' }} /> hair <i style={{ background: 'rgb(255,226,77)' }} /> face <i style={{ background: 'rgb(255,168,64)' }} /> skin{' '}
-              <i style={{ background: 'rgb(64,200,255)' }} /> clothes <i style={{ background: 'rgb(120,255,90)' }} /> accessories
+          <div className="ps-tools">
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#5d5a52' }}>
+              {engine === 'basic'
+                ? 'The face scanner could not load (offline?), so this is a colour guess. Fit the oval from hairline to chin.'
+                : faces.length > 1
+                  ? `Found ${faces.length} faces. Drag the oval onto the one you want, or pick one below.`
+                  : 'The oval only sets the crop for cursed mode. Drag it onto another face to scan that one instead.'}
             </p>
-          )}
+            <div className="row">
+              <button className="btn small" onClick={() => setStep('pick')}>
+                ← Different photo
+              </button>
+              <button className="btn small" onClick={() => setOver({})} disabled={!Object.keys(over).length}>
+                ↺ Reset my tweaks
+              </button>
+              {engine === 'ai' && faceIdx >= 0 && (
+                <button className="btn small" aria-pressed={xray} onClick={() => setXray((x) => !x)}>
+                  🔬 {xray ? 'Hide' : 'Show'} what the scanner sees
+                </button>
+              )}
+              {faces.length > 1 &&
+                faces.map((_, i) => (
+                  <button key={i} className="btn small" aria-pressed={faceIdx === i} onClick={() => pickFace(i)}>
+                    Face {i + 1}
+                  </button>
+                ))}
+            </div>
+            {xray && faceIdx >= 0 && (
+              <p className="xray-key">
+                <i style={{ background: 'rgb(236,64,196)' }} /> hair <i style={{ background: 'rgb(255,226,77)' }} /> face <i style={{ background: 'rgb(255,168,64)' }} /> skin{' '}
+                <i style={{ background: 'rgb(64,200,255)' }} /> clothes <i style={{ background: 'rgb(120,255,90)' }} /> accessories
+              </p>
+            )}
+          </div>
         </div>
 
-        <div>
+        <div className="ps-col">
           {preview && traits ? (
             <>
-              <div className="preview-card">
+              <div className="preview-card ps-preview">
                 <CharacterSvg c={preview} />
               </div>
-              <h3 style={{ fontFamily: 'var(--display)', fontWeight: 400, margin: '12px 0 8px' }}>
-                {engine === 'ai' && faceIdx >= 0 ? 'Our scientists detected:' : 'Our scientists guessed:'}
-              </h3>
-              <div className="trait-list">
-                <div className="trait">
-                  <span>Skin</span>
-                  <div className="mini-swatches">
-                    {SKIN_TONES.map((s) => (
-                      <button key={s.color} className="swatch" style={{ background: s.color }} aria-label={s.name} aria-pressed={traits.skin === s.color} onClick={() => set('skin', s.color)} />
-                    ))}
-                    {measured && (
-                      <button className="swatch exact" style={{ background: measured.skin }} title="Exact colour from the photo" aria-label="Exact colour from the photo" aria-pressed={traits.skin === measured.skin} onClick={() => set('skin', measured.skin)} />
-                    )}
+              <div className="ps-traits">
+                <h3 style={{ fontFamily: 'var(--display)', fontWeight: 400, margin: '12px 0 8px' }}>
+                  {engine === 'ai' && faceIdx >= 0 ? 'Our scientists detected:' : 'Our scientists guessed:'}
+                </h3>
+                <div className="trait-list">
+                  <div className="trait">
+                    <span>Skin</span>
+                    <div className="mini-swatches">
+                      {SKIN_TONES.map((s) => (
+                        <button key={s.color} className="swatch" style={{ background: s.color }} aria-label={s.name} aria-pressed={traits.skin === s.color} onClick={() => set('skin', s.color)} />
+                      ))}
+                      {measured && (
+                        <button className="swatch exact" style={{ background: measured.skin }} title="Exact colour from the photo" aria-label="Exact colour from the photo" aria-pressed={traits.skin === measured.skin} onClick={() => set('skin', measured.skin)} />
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="trait">
-                  <span>Hair colour</span>
-                  <div className="mini-swatches">
-                    {HAIR_COLORS.map((s) => (
-                      <button key={s.color} className="swatch" style={{ background: s.color }} aria-label={s.name} aria-pressed={traits.hairColor === s.color} onClick={() => set('hairColor', s.color)} />
-                    ))}
-                    {measured?.hair && (
-                      <button className="swatch exact" style={{ background: measured.hair }} title="Exact colour from the photo" aria-label="Exact hair colour from the photo" aria-pressed={traits.hairColor === measured.hair} onClick={() => set('hairColor', measured.hair!)} />
-                    )}
+                  <div className="trait">
+                    <span>Hair colour</span>
+                    <div className="mini-swatches">
+                      {HAIR_COLORS.map((s) => (
+                        <button key={s.color} className="swatch" style={{ background: s.color }} aria-label={s.name} aria-pressed={traits.hairColor === s.color} onClick={() => set('hairColor', s.color)} />
+                      ))}
+                      {measured?.hair && (
+                        <button className="swatch exact" style={{ background: measured.hair }} title="Exact colour from the photo" aria-label="Exact hair colour from the photo" aria-pressed={traits.hairColor === measured.hair} onClick={() => set('hairColor', measured.hair!)} />
+                      )}
+                    </div>
                   </div>
-                </div>
-                {select('hair', 'Hairstyle', HAIR)}
-                {select('facialHair', 'Facial hair', FACIAL_HAIR)}
-                {select('glasses', 'Glasses', GLASSES)}
-                {select('mouth', 'Mouth', MOUTHS)}
-                {select('eyes', 'Eyes', EYES)}
-                {select('hat', 'Hat', HATS)}
-                <div className="trait">
-                  <span>Shirt</span>
-                  <div className="mini-swatches">
-                    {CLOTH_COLORS.map((col) => (
-                      <button key={col} className="swatch" style={{ background: col }} aria-label={`Shirt ${col}`} aria-pressed={traits.shirt === col} onClick={() => set('shirt', col)} />
-                    ))}
+                  {select('hair', 'Hairstyle', HAIR)}
+                  {select('facialHair', 'Facial hair', FACIAL_HAIR)}
+                  {select('glasses', 'Glasses', GLASSES)}
+                  {select('mouth', 'Mouth', MOUTHS)}
+                  {select('eyes', 'Eyes', EYES)}
+                  {select('hat', 'Hat', HATS)}
+                  <div className="trait">
+                    <span>Shirt</span>
+                    <div className="mini-swatches">
+                      {CLOTH_COLORS.map((col) => (
+                        <button key={col} className="swatch" style={{ background: col }} aria-label={`Shirt ${col}`} aria-pressed={traits.shirt === col} onClick={() => set('shirt', col)} />
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="trait">
-                  <span>Cursed mode</span>
-                  <div className="chips">
-                    <button className="chip-btn" aria-pressed={usePhoto} onClick={() => setUsePhoto((u) => !u)}>
-                      {usePhoto ? '😱 using my real face' : 'paste my real face on'}
-                    </button>
-                    {usePhoto && (
-                      <button className="chip-btn" aria-pressed={posterize} onClick={() => setPosterize((p) => !p)}>
-                        cut-out filter
+                  <div className="trait">
+                    <span>Cursed mode</span>
+                    <div className="chips">
+                      <button className="chip-btn" aria-pressed={usePhoto} onClick={() => setUsePhoto((u) => !u)}>
+                        {usePhoto ? '😱 using my real face' : 'paste my real face on'}
                       </button>
-                    )}
+                      {usePhoto && (
+                        <button className="chip-btn" aria-pressed={posterize} onClick={() => setPosterize((p) => !p)}>
+                          cut-out filter
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="row" style={{ marginTop: 16 }}>
-                <button className="btn red big" onClick={apply}>
-                  ✂️ Paper-ify me!
-                </button>
               </div>
             </>
           ) : (
-            <div className="empty">
+            <div className="empty ps-preview">
               <p>{scanning ? scanLine : 'Waiting for a face…'}</p>
             </div>
           )}
         </div>
       </div>
+      {step === 'adjust' && preview && (
+        // Stays pinned to the bottom of the dialog while the trait list scrolls.
+        <div className="row ps-apply">
+          <button className="btn red big" onClick={apply}>
+            ✂️ Paper-ify me!
+          </button>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -545,7 +569,7 @@ function ScannerProgress({ f }: { f: number }) {
   return (
     <div className="scan-progress" role="progressbar" aria-valuenow={Math.round(f * 100)} aria-valuemin={0} aria-valuemax={100}>
       <div style={{ width: `${Math.round(f * 100)}%` }} />
-      <span>Downloading the face scanner (about 20 MB, just once)… {Math.round(f * 100)}%</span>
+      <span>Downloading the face scanner (about 24 MB, just once)… {Math.round(f * 100)}%</span>
     </div>
   );
 }

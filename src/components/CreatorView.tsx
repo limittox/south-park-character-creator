@@ -179,7 +179,7 @@ export function CreatorView({ c, set, undo, redo, canUndo, canRedo, onSave, onCa
       <div className="stage-col">
         <div className="panel stage-panel">
           <div className="stage">
-            <svg className="stage-svg" viewBox={stageViewBox(c)} aria-label={`${c.name}, your character. Click a body part to change it.`} role="img">
+            <svg className="stage-svg" viewBox={stageViewBox(c)} aria-label={`${c.name}, your character. Tap or click a body part to change it.`} role="img">
               <StageBackdrop />
               <g key={`s${shake}`} className={shake ? 'char-wrap shake' : 'char-wrap'}>
                 <g key={`p${popKey}`} className={popKey ? 'char-wrap pop' : 'char-wrap'} style={{ transformOrigin: '200px 480px', transformBox: 'view-box' }}>

@@ -93,6 +93,8 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn =
       </>
     );
   }
+  // Glasses arms run back to the ears: anything past the edge of the head is tucked behind it.
+  const glassesClipId = uid('glassclip');
   const showHair = !hat.hidesHair && !hat.hidesFace;
   const hairClip = hairClipId ? `url(#${hairClipId})` : undefined;
   const backClip = backClipId ? `url(#${backClipId})` : undefined;
@@ -178,8 +180,12 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn =
       <g transform={faceT}>
         {/* Brows sit on top of fringes so they stay visible; hats still cover them. */}
         {!hat.hidesFace && !photo && c.brows !== 'none' && part('brows', fit(EYES_FIT, <BrowHalo skin={c.skin} uid={uid}>{brows.render(ctx(c.hairColor))}</BrowHalo>), 'brows')}
-        {!hat.hidesFace && glasses.render && part('glasses', fit(EYES_FIT, glasses.render(ctx(c.glassesColor))), 'glasses')}
       </g>
+      {!hat.hidesFace && glasses.render && (
+        <g clipPath={`url(#${glassesClipId})`}>
+          <g transform={faceT}>{part('glasses', fit(EYES_FIT, glasses.render(ctx(c.glassesColor))), 'glasses')}</g>
+        </g>
+      )}
       {hat.front && part('hat', <g transform={swayT}><g transform={hatT}>{hat.front(ctx(c.hatColor))}</g></g>, 'hat')}
       {hat.eyesOver && !photo && <g transform={faceT}>{part('eyes', fit(EYES_FIT, eyes.render(ctx(c.hairColor))), 'eyes-over')}</g>}
     </>
@@ -221,7 +227,12 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn =
 
   return (
     <g className="sp-char">
-      {hairClipDef && <defs>{hairClipDef}</defs>}
+      <defs>
+        {hairClipDef}
+        <clipPath id={glassesClipId}>
+          <path d={shape.path} />
+        </clipPath>
+      </defs>
       {pet.render && part('sidekick', pet.render(ctx(c.heldColor)))}
       {neck.back && part('neck', neck.back(ctx(c.neckColor)))}
       {showHair && hair.back && (

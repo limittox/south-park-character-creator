@@ -784,6 +784,8 @@ button {
   box-shadow: 6px 8px 0 rgba(29, 29, 29, 0.9);
   width: min(960px, 100%);
   max-height: calc(100vh - 32px);
+  /* Phones: 100vh runs under the browser bars, dvh doesn't. */
+  max-height: calc(100dvh - 32px);
   overflow: auto;
   position: relative;
   animation: modal-in 0.22s cubic-bezier(0.2, 1.4, 0.4, 1);
@@ -1015,6 +1017,17 @@ button {
   background: #fff;
   font-weight: 700;
   max-width: 100%;
+}
+
+.ps-apply {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  justify-content: flex-end;
+  margin: 14px -18px -18px;
+  padding: 10px 18px 12px;
+  background: var(--paper);
+  border-top: 3px solid var(--ink);
 }
 
 .trait .why {
@@ -1661,6 +1674,74 @@ button {
   }
   .ticker .msg {
     font-size: 13px;
+  }
+  /* Photo -> Me: photo and result side by side, so the result is on screen straight away. */
+  .photo-steps {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'photo preview'
+      'tools tools'
+      'traits traits';
+    gap: 10px;
+  }
+  .photo-steps > .ps-col {
+    display: contents;
+  }
+  .ps-photo {
+    grid-area: photo;
+  }
+  .ps-preview {
+    grid-area: preview;
+    align-self: start;
+  }
+  .ps-tools {
+    grid-area: tools;
+  }
+  .ps-traits {
+    grid-area: traits;
+  }
+  .ps-apply .btn {
+    width: 100%;
+  }
+  .trait > span:first-child {
+    min-width: 0;
+    width: 100%;
+  }
+  .trait select {
+    width: 100%;
+  }
+}
+
+/* Touch screens: fingers need bigger targets than mouse pointers. */
+@media (pointer: coarse) {
+  .btn,
+  .chip-btn,
+  .cat-pill,
+  .trait select {
+    min-height: 44px;
+  }
+  .swatch {
+    width: 36px;
+    height: 36px;
+  }
+  .swatch:hover {
+    transform: none;
+  }
+  .mini-swatches {
+    gap: 7px;
+  }
+  .mini-swatches .swatch {
+    width: 34px;
+    height: 34px;
+  }
+  .face-oval .handle {
+    width: 32px;
+    height: 32px;
+    right: -16px;
+    bottom: -16px;
+  }
+  .field input[type='range'] {
+    min-height: 44px;
   }
 }
 

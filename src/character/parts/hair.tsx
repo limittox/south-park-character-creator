@@ -1,6 +1,6 @@
 import type { ItemBase, Render } from '../../types';
-import { shade } from '../../lib/color';
-import { ink, Mirror, O, scallop, scallopArc, scallopEdge } from './common';
+import { luminance, shade } from '../../lib/color';
+import { ink, Mirror, scallop, scallopArc, scallopEdge } from './common';
 
 export interface HairDef extends ItemBase {
   back?: Render;
@@ -12,6 +12,33 @@ const fill = (color: string) => ({ fill: color, ...ink });
 /** Top-of-head dome every cap-style haircut starts from, ending at (±x, y). */
 const dome = (x: number, y: number, top = -120) =>
   `M ${-x} ${y} C ${-x - 8} ${top + 34} ${-72} ${top} 0 ${top} C 72 ${top} ${x + 8} ${top + 34} ${x} ${y}`;
+
+/**
+ * One loc: a flat rope of hair with darker twist bands across it every so often, ending in a
+ * rounded tip. Drawn as a thick round-capped stroke so it stays outline-free in the show style.
+ */
+function loc(key: string | number, x0: number, y0: number, x1: number, y1: number, bend: number, w: number, color: string, phase = 0) {
+  // A gentle S: out at the top, back in towards the tip, the way heavy locs hang.
+  const len = y1 - y0;
+  const d = `M ${x0} ${y0} C ${x0 + bend} ${y0 + len * 0.35} ${x1 - bend * 0.5} ${y1 - len * 0.4} ${x1} ${y1}`;
+  return (
+    <g key={key} fill="none">
+      <path d={d} stroke={color} strokeWidth={w} strokeLinecap="round" />
+      {/* Staggered from loc to loc so the bands never line up into stripes across the hair. */}
+      <path d={d} stroke={luminance(color) < 0.2 ? shade(color, 0.22) : shade(color, -0.24)} strokeWidth={w * 0.86} strokeDasharray={`2.2 ${(w * 1.55).toFixed(1)}`} strokeDashoffset={-(w + phase * w * 0.6)} />
+    </g>
+  );
+}
+
+/** Where each loc behind the head starts and ends, for one side (mirrored for the other). */
+const LOCS_BACK = [
+  { x0: 44, y0: -104, x1: 104, y1: 150, bend: 10, w: 22 },
+  { x0: 62, y0: -96, x1: 118, y1: 182, bend: 16, w: 21 },
+  { x0: 80, y0: -86, x1: 128, y1: 160, bend: 12, w: 23 },
+  { x0: 96, y0: -72, x1: 142, y1: 190, bend: 20, w: 21 },
+  { x0: 110, y0: -56, x1: 152, y1: 168, bend: 14, w: 22 },
+  { x0: 122, y0: -36, x1: 166, y1: 150, bend: 18, w: 20 },
+];
 
 export const HAIR: HairDef[] = [
   {
@@ -242,24 +269,30 @@ export const HAIR: HairDef[] = [
     id: 'locs',
     name: 'Locs',
     quip: 'Effortlessly cool. (It took a lot of effort.)',
+    // A curtain of locs hanging behind the head to past the shoulders, a crown of rounded roots,
+    // and a few in front framing the face, two of them with gold cuffs.
     back: (c) => (
-      <g stroke={O} strokeWidth={22} strokeLinecap="round">
-        {[-140, -112, 112, 140].map((x) => (
-          <path key={x} d={`M ${x} -60 L ${x * 1.06} 170`} />
-        ))}
-        <g stroke={shade(c.color, -0.08)} strokeWidth={16}>
-          {[-140, -112, 112, 140].map((x) => (
-            <path key={x} d={`M ${x} -60 L ${x * 1.06} 170`} />
-          ))}
-        </g>
+      <g>
+        {[-1, 1].map((side) =>
+          LOCS_BACK.map((l, k) => loc(`${side}${k}`, side * l.x0, l.y0, side * l.x1, l.y1, side * l.bend, l.w, shade(c.color, -0.12), (k * 0.37 + (side > 0 ? 0.5 : 0)) % 1)),
+        )}
       </g>
     ),
     front: (c) => (
       <g>
-        <path d={`${dome(128, -10, -124)} C 100 -46 60 -58 0 -58 C -60 -58 -100 -46 -128 -10 Z`} {...fill(c.color)} />
-        <g stroke={shade(c.color, -0.3)} strokeWidth={2} fill="none">
-          <path d="M -80 -60 Q -70 -100 -50 -116 M -30 -58 Q -20 -100 0 -120 M 20 -58 Q 30 -100 50 -116 M 70 -58 Q 80 -96 96 -104" />
-        </g>
+        <path
+          d={`${dome(130, 8, -124)} ${scallopEdge(130, 8, 104, -34, 2, 7)} ${scallopEdge(104, -34, -104, -34, 6, 9)} ${scallopEdge(-104, -34, -130, 8, 2, 7)} Z`}
+          {...fill(c.color)}
+        />
+        {/* Parting lines between the sections each loc grows from. */}
+        <path d="M -86 -40 Q -78 -88 -52 -114 M -52 -46 Q -40 -96 -18 -122 M -17 -48 Q -6 -100 12 -124 M 17 -48 Q 28 -98 46 -118 M 52 -46 Q 66 -92 82 -108 M 86 -40 Q 100 -74 112 -84" fill="none" stroke={luminance(c.color) < 0.2 ? shade(c.color, 0.22) : shade(c.color, -0.3)} strokeWidth={2.4} strokeLinecap="round" />
+        {[-1, 1].map((side) => (
+          <g key={side}>
+            {loc('a', side * 112, -26, side * 124, 146, side * 12, 20, c.color, side > 0 ? 0.2 : 0.7)}
+            {loc('b', side * 126, -8, side * 148, 170, side * 14, 20, c.color, side > 0 ? 0.55 : 0.05)}
+            <rect x={side * 128 - 12} y={92} width={24} height={9} rx={3} fill="#e3b341" transform={`rotate(${-side * 6} ${side * 128} 96)`} />
+          </g>
+        ))}
       </g>
     ),
   },

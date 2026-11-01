@@ -314,7 +314,7 @@ export function PhotoBooth({ current, crew, initialCast }: Props) {
           </div>
         )}
         <div className="row" style={{ marginTop: 10, justifyContent: 'space-between' }}>
-          <span style={{ fontWeight: 800, fontSize: 13 }}>👆 Drag characters around. Click one to edit it.</span>
+          <span style={{ fontWeight: 800, fontSize: 13 }}>👆 Drag characters around. {matchMedia('(pointer: coarse)').matches ? 'Tap' : 'Click'} one to edit it.</span>
           <button className="btn red big" onClick={snap} disabled={count !== null || !actors.length}>
             📸 Snap Photo
           </button>
